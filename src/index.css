@@ -1,31 +1,28 @@
 :root {
-  --text: #6b6375;
-  :root {
-    --sage: #6f8f83;
-    --forest: #35564c;
-    --cream: #faf7f2;
-    --surface: #fffdfc;
-    --terracotta: #b8644d;
-    --ink: #28332f;
-    --muted: #69756f;
-    --line: #ddd8d0;
-    --sans: 'Manrope', 'Segoe UI', sans-serif;
-    --serif: 'Lora', Georgia, serif;
-    font-family: var(--sans);
-    color: var(--ink);
-    background: var(--cream);
-    font-synthesis: none;
-    text-rendering: optimizeLegibility;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-    font-optical-sizing: auto;
-  }
-
-  * { box-sizing: border-box; }
-  html { min-width: 320px; scroll-behavior: smooth; }
-  body { min-width: 320px; min-height: 100vh; margin: 0; }
-  button, input, textarea { font: inherit; }
-  button:focus-visible, a:focus-visible { outline: 3px solid #c9785d; outline-offset: 3px; }
-  #root { min-height: 100vh; }
-  ::selection { color: #fff; background: var(--forest); }
+  --sage: #78c0c9;
+  --forest: #464c80;
+  --cream: #f6f1ea;
+  --surface: #fcf9f5;
+  --terracotta: #a58ac7;
+  --ink: #424775;
+  --muted: #70738b;
+  --line: #e6ded6;
+  --sans: 'Manrope', 'Segoe UI', sans-serif;
+  --serif: 'Lora', Georgia, serif;
+  font-family: var(--sans);
+  color: var(--ink);
+  background: var(--cream);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-optical-sizing: auto;
 }
+
+* { box-sizing: border-box; }
+html { min-width: 320px; scroll-behavior: smooth; }
+body { min-width: 320px; min-height: 100vh; margin: 0; }
+button, input, textarea { font: inherit; }
+button:focus-visible, a:focus-visible { outline: 3px solid var(--forest); outline-offset: 3px; }
+#root { min-height: 100vh; }
+::selection { color: #fff; background: var(--forest); }
