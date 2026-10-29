@@ -4,6 +4,7 @@ from django.http import JsonResponse
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
+from django.views.decorators.http import require_GET
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -16,6 +17,7 @@ from .serializers import (
     PrivateIdentitySerializer,
     RequestCreateSerializer,
     RequestStatusSerializer,
+    PublicStatusLookupSerializer,
     UrgencyCreateSerializer,
     UrgencyEvaluationSerializer,
 )
@@ -25,6 +27,11 @@ from .throttles import LoginRateThrottle, RequestCreateThrottle, UrgencyCreateTh
 
 
 ACTIVE_STATUSES = [CounselingRequest.Status.WAITING, CounselingRequest.Status.REVIEW, CounselingRequest.Status.IN_PROGRESS]
+
+
+@require_GET
+def health_check(request):
+    return JsonResponse({'status': 'ok'})
 
 
 @ensure_csrf_cookie
@@ -51,7 +58,7 @@ class RequestStatusView(APIView):
     throttle_classes = [AnonRateThrottle]
 
     def post(self, request):
-        serializer = PrivateIdentitySerializer(data=request.data)
+        serializer = PublicStatusLookupSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         order = find_public_request(**serializer.validated_data)
         if order is None:
@@ -112,6 +119,15 @@ class AdminDashboardView(APIView):
             if order.status in ACTIVE_STATUSES:
                 position += 1
                 positions[order.pk] = position
+        call_list = [{
+            'id': order.pk,
+            'full_name': order.full_name,
+            'classroom': order.classroom,
+            'received_at': order.received_at,
+            'status': order.status,
+            'contact_status': order.contact_status,
+            'queue_position': positions[order.pk],
+        } for order in orders if order.pk in positions]
         query = request.query_params.get('q', '').strip()[:100]
         classroom = request.query_params.get('classroom', '').strip()[:80]
         status_filter = request.query_params.get('status', '').strip()
@@ -125,6 +141,7 @@ class AdminDashboardView(APIView):
         return Response({
             'counts': {item['status']: item['total'] for item in counts},
             'pending_urgencies': UrgencyRequest.objects.filter(evaluation=UrgencyRequest.Evaluation.PENDING).count(),
+            'call_list': call_list,
             'requests': [{
                 'id': order.pk,
                 'full_name': order.full_name,
@@ -181,10 +198,14 @@ class AdminUrgencyListView(APIView):
     permission_classes = [IsPsychologist]
 
     def get(self, request):
-        urgencies = UrgencyRequest.objects.select_related('request').all()
+        urgencies = list(UrgencyRequest.objects.select_related('request').all())
         evaluation = request.query_params.get('evaluation', '')
         if evaluation:
-            urgencies = urgencies.filter(evaluation=evaluation)
+            urgencies = [item for item in urgencies if item.evaluation == evaluation]
+        urgencies.sort(key=lambda item: (
+            item.evaluation != UrgencyRequest.Evaluation.PENDING,
+            item.submitted_at,
+        ))
         return Response({'urgencies': [{
             'id': item.pk,
             'request_id': item.request_id,

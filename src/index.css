@@ -1,13 +1,13 @@
 :root {
-  --sage: #78c0c9;
-  --forest: #464c80;
-  --cream: #f6f1ea;
-  --surface: #fcf9f5;
-  --terracotta: #a58ac7;
-  --ink: #424775;
-  --muted: #70738b;
-  --line: #e6ded6;
-  --shadow: 0 18px 48px rgba(66, 71, 117, .09);
+  --sage: #c28b8b;
+  --forest: #543c52;
+  --cream: #fbf1e8;
+  --surface: #fffaf5;
+  --terracotta: #bd8580;
+  --ink: #513c50;
+  --muted: #77656b;
+  --line: #ead9cf;
+  --shadow: 0 18px 48px rgba(84, 60, 82, .1);
   --sans: 'Manrope', 'Segoe UI', sans-serif;
   --serif: 'Lora', Georgia, serif;
   font-family: var(--sans);
@@ -23,7 +23,7 @@
 * { box-sizing: border-box; }
 html { min-width: 320px; scroll-behavior: smooth; }
 body { min-width: 320px; min-height: 100vh; margin: 0; }
-body { background: radial-gradient(ellipse at 85% 4%, rgba(165, 138, 199, .11), transparent 30rem), var(--cream); }
+body { background: radial-gradient(ellipse at 85% 4%, rgba(194, 139, 139, .13), transparent 30rem), var(--cream); }
 button, input, textarea { font: inherit; }
 button:focus-visible, a:focus-visible { outline: 3px solid var(--forest); outline-offset: 3px; }
 #root { min-height: 100vh; }

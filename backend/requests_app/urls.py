@@ -12,9 +12,11 @@ from .views import (
     RequestStatusView,
     UrgencyCreateView,
     csrf_token,
+    health_check,
 )
 
 urlpatterns = [
+    path('health/', health_check, name='health-check'),
     path('csrf/', csrf_token, name='csrf-token'),
     path('requests/', RequestCreateView.as_view(), name='request-create'),
     path('requests/status/', RequestStatusView.as_view(), name='request-status'),

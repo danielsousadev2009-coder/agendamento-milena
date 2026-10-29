@@ -38,6 +38,10 @@ class PrivateIdentitySerializer(serializers.Serializer):
             raise serializers.ValidationError('Informe um CPF válido.') from error
 
 
+class PublicStatusLookupSerializer(PrivateIdentitySerializer):
+    pass
+
+
 class UrgencyCreateSerializer(PrivateIdentitySerializer):
     description = serializers.CharField(min_length=10, max_length=2000, trim_whitespace=True, write_only=True)
 
