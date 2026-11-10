@@ -18,7 +18,7 @@ O Django declarava 12 caminhos de URL; o detalhe da solicitação aceita `GET` e
 | `POST /api/requests/` | Validação de nome, CPF e turma; protocolo; fila; auditoria; conflito de CPF ativo | Implementado |
 | `POST /api/requests/status/` | Consulta por protocolo + CPF e posição da fila | Implementado |
 | `POST /api/requests/urgency/` | Vincula pedido, cifra descrição e registra auditoria | Implementado |
-| `POST /api/admin/login/` | Login da psicóloga ativa; compatibilidade PBKDF2; sessão e cookie | Implementado |
+| `POST /api/admin/login/` | Supabase Auth com e-mail confirmado e perfil administrativo ativo vinculado; sessão e cookie locais | Implementado |
 | `POST /api/admin/logout/` | Revoga a sessão e limpa cookie | Implementado |
 | `GET /api/admin/dashboard/` | Contagens, fila, busca e filtros | Implementado |
 | `GET /api/admin/requests/:id/` | Detalhes, CPF mascarado e histórico | Implementado |
@@ -33,19 +33,19 @@ Respostas, códigos HTTP, estados, validações e campos consumidos pelo React f
 
 Os modelos legados correspondem a `requests_app_counselingrequest`, `requests_app_urgencyrequest`, `requests_app_auditevent`, `requests_app_queuecounter` e `requests_app_psychologistaccount`, além de `auth_user` e `django_session`. Nenhuma tabela, usuário ou migration foi apagada; nenhuma alteração de esquema foi necessária. A chave Fernet e a chave HMAC existentes precisam ser mantidas exatamente.
 
-Hashes Django `pbkdf2_sha256` são verificados sem redefinir senha. A criação administrativa passa a usar bcrypt-SHA256. Sessões/throttles Node são compartilhados entre instâncias via tabela PostgreSQL existente `django_session`; cookies Django preexistentes não são convertidos em sessões Node.
+O Supabase Auth valida as credenciais. O cadastro público do Supabase deve permanecer desativado; o e-mail confirmado da conta Supabase deve corresponder ao e-mail do perfil ativo nas tabelas legadas `auth_user` e `requests_app_psychologistaccount`. Essa verificação mantém a autorização do painel restrita à psicóloga. A API usa uma chave pública Supabase apenas no servidor para o login e não usa `service_role`. Depois da autenticação, sessões/throttles Node são compartilhados entre instâncias via tabela PostgreSQL existente `django_session`; cookies Django preexistentes não são convertidos em sessões Node.
 
 ## Funcionalidades ausentes no sistema original
 
 - Não havia API nem interface para cadastro público, recuperação ou troca de senha; não foram adicionadas.
 - Não havia integração de e-mail/SMS; notificações continuam visíveis somente no painel aberto.
-- Não há endpoint público de registro de conta administrativa; a criação restrita continua sendo uma operação de servidor via `npm run create:psychologist`.
+- Não há endpoint público de registro de conta administrativa; a conta de autenticação é criada/confirmada no Supabase e o perfil legado é provisionado por `npm run create:psychologist`.
 
 ## Validação executada
 
 - Build de produção React: aprovado.
 - Oxlint e `git diff --check`: aprovados.
-- Testes unitários/HTTP: CPF, Fernet compatível com ciphertext Python, hashes PBKDF2 antigos e bcrypt-SHA256, validações, health, CSRF, autorização e CORS: aprovados.
+- Testes unitários/HTTP: CPF, Fernet compatível com ciphertext Python, login Supabase Auth confirmado (simulado), validações, health, CSRF, autorização e CORS: aprovados.
 - Conexão ao PostgreSQL Supabase e operações CRUD/auditoria/throttle, além da leitura de sessão quando há conta ativa: aprovadas em teste transacional com dados sintéticos e `ROLLBACK`; nenhuma alteração persistiu.
 - Não foram testados login real com a senha da psicóloga nem o deploy/roteamento dentro de um projeto Vercel publicado. Esses testes dependem do ambiente operacional e das credenciais que não devem ser incluídas no repositório.
 

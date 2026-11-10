@@ -89,7 +89,7 @@ function App() {
   const [protocol, setProtocol] = useState('')
   const [result, setResult] = useState<RequestResult | null>(null)
   const [description, setDescription] = useState('')
-  const [username, setUsername] = useState('')
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
@@ -138,7 +138,7 @@ function App() {
   }
 
   async function login() {
-    const response = await requestApi<{ authenticated: boolean }>('admin/login/', { username, password })
+    const response = await requestApi<{ authenticated: boolean }>('admin/login/', { email, password })
     if (!response.authenticated) throw new Error('Não foi possível entrar. Verifique os dados ou tente mais tarde.')
     setPassword('')
     navigate('dashboard')
@@ -207,7 +207,7 @@ function App() {
 
         {screen === 'urgency' && <section className="form-page urgency-page"><button className="back-link" onClick={() => navigate('home')}>← Voltar ao início</button><p className="eyebrow">Pedido de avaliação</p><h1>Estamos ouvindo.</h1><p className="form-lead">Este canal permite que a psicóloga avalie um pedido de urgência. Envie apenas o necessário; sua mensagem não será exibida na consulta pública.</p><form onSubmit={(event) => void submit(event, sendUrgency)} noValidate><label>Protocolo<input autoComplete="off" value={protocol} onChange={(event) => setProtocol(event.target.value)} required /></label><label>CPF usado na solicitação<input inputMode="numeric" autoComplete="off" maxLength={11} pattern="[0-9]{11}" value={cpf} onChange={(event) => setCpf(sanitizeCpfInput(event.currentTarget.value))} placeholder="Somente números" required /></label><label>Conte brevemente o que está acontecendo<textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={5} maxLength={2000} required /><small>Compartilhe apenas o que considera necessário. Até 2.000 caracteres.</small></label>{message && <p className={message.startsWith('Sua solicitação') ? 'form-success' : 'form-message'} role="status">{message}</p>}<button className="button button-primary form-submit" disabled={busy}>{busy ? 'Enviando…' : 'Enviar para avaliação'}</button></form><div className="safety-note"><strong>Se houver perigo imediato</strong><p>Este canal não garante atendimento imediato. Se você ou outra pessoa estiver em perigo imediato, procure um adulto de confiança ou um serviço de emergência.</p></div></section>}
 
-        {screen === 'admin' && <section className="form-page"><button className="back-link" onClick={() => navigate('home')}>← Voltar ao início</button><p className="eyebrow">Área restrita</p><h1>Acesso da psicóloga.</h1><p className="form-lead">Entre com as credenciais administrativas fornecidas pela instituição.</p><form onSubmit={(event) => void submit(event, login)} noValidate><label>Usuário ou e-mail<input autoComplete="username" value={username} onChange={(event) => setUsername(event.target.value)} required /></label><label>Senha<input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required /></label>{message && <p className="form-message" role="alert">{message}</p>}<button className="button button-primary form-submit" disabled={busy}>{busy ? 'Entrando…' : 'Entrar'}</button></form><p className="form-hint">Não há cadastro público. A conta deve ser criada por procedimento seguro no servidor.</p></section>}
+        {screen === 'admin' && <section className="form-page"><button className="back-link" onClick={() => navigate('home')}>← Voltar ao início</button><p className="eyebrow">Área restrita</p><h1>Acesso da psicóloga.</h1><p className="form-lead">Entre com as credenciais administrativas fornecidas pela instituição.</p><form onSubmit={(event) => void submit(event, login)} noValidate><label>E-mail<input type="email" autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} required /></label><label>Senha<input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required /></label>{message && <p className="form-message" role="alert">{message}</p>}<button className="button button-primary form-submit" disabled={busy}>{busy ? 'Entrando…' : 'Entrar'}</button></form><p className="form-hint">A conta precisa estar cadastrada e confirmada no Supabase Auth e vinculada ao perfil administrativo.</p></section>}
 
         {screen === 'dashboard' && <AdminDashboard onLogout={() => { void requestApi('admin/logout/', {}).finally(() => navigate('home')) }} />}
       </main>

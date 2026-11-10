@@ -1,8 +1,6 @@
 import { createInterface } from 'node:readline'
 import { stdin, stdout } from 'node:process'
-import { StringDecoder } from 'node:string_decoder'
 import { closePool } from '../server/config/database.js'
-import { hashPassword } from '../server/utils/crypto.js'
 import { inTransaction } from '../server/utils/database.js'
 
 function readLine(question) {
@@ -15,59 +13,10 @@ function readLine(question) {
   })
 }
 
-function readSecret(question) {
-  if (!stdin.isTTY || typeof stdin.setRawMode !== 'function') {
-    throw new Error('A terminal is required to enter the password securely.')
-  }
-  return new Promise((resolve, reject) => {
-    const characters = []
-    const decoder = new StringDecoder('utf8')
-    stdout.write(question)
-    stdin.setRawMode(true)
-    stdin.resume()
-
-    function finish(error) {
-      stdin.off('data', onData)
-      stdin.setRawMode(false)
-      stdin.pause()
-      stdout.write('\n')
-      if (error) reject(error)
-      else resolve(characters.join(''))
-    }
-
-    function onData(buffer) {
-      for (const character of decoder.write(buffer)) {
-        if (character === '\u0003') {
-          finish(new Error('Password entry cancelled.'))
-          return
-        }
-        if (character === '\r' || character === '\n') {
-          finish()
-          return
-        }
-        if (character === '\u007f' || character === '\b') {
-          characters.pop()
-          continue
-        }
-        if (character >= ' ') {
-          characters.push(character)
-          stdout.write('*')
-        }
-      }
-    }
-
-    stdin.on('data', onData)
-  })
-}
-
 async function main() {
-  const username = (await readLine('Usuário ou e-mail: ')).trim()
-  if (!username || username.length > 150) throw new Error('O usuário deve conter entre 1 e 150 caracteres.')
-  const password = await readSecret('Senha (mínimo de 8 caracteres): ')
-  const repeated = await readSecret('Repita a senha: ')
-  if (password !== repeated) throw new Error('As senhas não coincidem.')
-  if (password.length < 8 || /^\d+$/.test(password) || password.toLowerCase().includes(username.toLowerCase())) {
-    throw new Error('A senha deve ter ao menos 8 caracteres, não ser apenas numérica e não conter o usuário.')
+  const email = (await readLine('E-mail da psicóloga: ')).trim().toLowerCase()
+  if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new Error('Informe um endereço de e-mail válido.')
   }
 
   await inTransaction(async (client) => {
@@ -76,13 +25,19 @@ async function main() {
     )
     if (existing.rows.length) throw new Error('Já existe um perfil de psicóloga cadastrado.')
 
+    const existingUser = await client.query(
+      'SELECT id FROM auth_user WHERE LOWER(TRIM(email)) = $1 OR username = $1 LIMIT 1',
+      [email],
+    )
+    if (existingUser.rows.length) throw new Error('Já existe um usuário com esse e-mail.')
+
     const user = await client.query(
       `INSERT INTO auth_user
         (password, last_login, is_superuser, username, first_name, last_name, email,
          is_staff, is_active, date_joined)
        VALUES ($1, NULL, FALSE, $2, '', '', $3, FALSE, TRUE, NOW())
        RETURNING id`,
-      [hashPassword(password), username, username.includes('@') ? username : ''],
+      ['!', email, email],
     )
     await client.query(
       `INSERT INTO requests_app_psychologistaccount (active, slot, created_at, last_login_at, user_id)
@@ -90,7 +45,7 @@ async function main() {
       [user.rows[0].id],
     )
   })
-  console.info('Conta administrativa criada. Guarde as credenciais em local seguro.')
+  console.info('Perfil criado. Cadastre ou convide este e-mail no Supabase Auth e confirme a conta.')
 }
 
 try {

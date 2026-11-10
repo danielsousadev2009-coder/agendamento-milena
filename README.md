@@ -12,20 +12,21 @@ Aplicação React/Vite com API REST em Node.js + Express e PostgreSQL no projeto
 
 1. Copie `.env.example` para `.env`.
 2. Preencha `DATABASE_URL` com a conexão **Transaction pooler** do projeto Supabase existente. Use o host, o usuário, a senha e a porta mostrados pelo painel; não componha a URL manualmente. A porta usual do pooler de transação é `6543`.
-3. Configure `PII_ENCRYPTION_KEY` e `CPF_INDEX_KEY` com os valores atuais, preservando-os exatamente.
-4. Gere um `JWT_SECRET` exclusivo:
+3. Configure `SUPABASE_URL` e `SUPABASE_PUBLISHABLE_KEY` com os valores de **Project URL** e **Publishable key** do mesmo projeto Supabase. Nunca use `service_role` nesta aplicação.
+4. Configure `PII_ENCRYPTION_KEY` e `CPF_INDEX_KEY` com os valores atuais, preservando-os exatamente.
+5. Gere um `JWT_SECRET` exclusivo:
 
    ```powershell
    node -e "console.log(require('node:crypto').randomBytes(48).toString('base64url'))"
    ```
 
-5. Instale dependências:
+6. Instale dependências:
 
    ```powershell
    npm ci
    ```
 
-6. Abra dois terminais:
+7. Abra dois terminais:
 
    ```powershell
    npm run dev:api
@@ -50,10 +51,9 @@ O servidor também aceita as variáveis legadas `DB_HOST`, `DB_NAME`, `DB_USER`,
 | `npm run lint` | Oxlint |
 | `npm test` | Testes unitários e HTTP |
 | `npm run test:db` | Teste PostgreSQL opt-in, com CRUD sintético dentro de transação revertida |
-| `npm run create:psychologist` | Cria a conta administrativa por terminal, sem exibir a senha |
-| `npm run reset:psychologist-password` | Redefine a senha de uma conta administrativa existente |
+| `npm run create:psychologist` | Cria o perfil administrativo legado que será vinculado à conta Supabase |
 
-Para redefinir uma senha esquecida, configure no `.env` uma conexão válida com o banco e execute `npm run reset:psychologist-password` em um terminal. O comando solicita o usuário e a nova senha sem exibi-la, atualiza apenas uma conta administrativa ativa e encerra as sessões anteriores dessa conta. Não execute esse comando em terminais ou ambientes compartilhados.
+O login da psicóloga usa Supabase Auth. Desative o cadastro público nas configurações de Auth do projeto e crie ou convide a usuária em **Authentication → Users**. Confirme o e-mail e use o mesmo e-mail do perfil administrativo ativo existente no banco. A senha é gerenciada pelo Supabase; redefina-a pelos fluxos de recuperação do Supabase, não pelo banco legado. O projeto não oferece cadastro público.
 
 Para executar o teste real do banco em PowerShell:
 
@@ -70,6 +70,7 @@ O teste verifica a conexão e o esquema existente, cria registros exclusivamente
 1. Importe o repositório com a raiz do projeto na pasta principal. O build configurado é `npm run build`, com saída em `dist`; `api/[...path].js` encaminha todas as rotas REST para uma única função Express.
 2. Configure as variáveis de ambiente na Vercel:
    - `DATABASE_URL`: URL do **Transaction pooler** do mesmo projeto Supabase.
+   - `SUPABASE_URL` e `SUPABASE_PUBLISHABLE_KEY`: URL e chave pública do mesmo projeto. Não configure a chave `service_role`.
    - `JWT_SECRET`: segredo aleatório exclusivo, com no mínimo 32 bytes.
    - `FRONTEND_URL`: origem HTTPS exata do domínio de produção, sem caminho ou barra final.
    - `PII_ENCRYPTION_KEY`: valor atual do banco, sem alteração.
@@ -82,9 +83,9 @@ Não configure `BACKEND_URL`, `VITE_API_BASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` o
 
 ## Dados e autenticação
 
-Não é necessária alteração de esquema: a API usa as tabelas Django já existentes e não apaga tabelas, usuários ou registros. As tabelas antigas de autenticação e sessões permanecem como dados PostgreSQL; os arquivos de migrations históricos também são mantidos. Sessões JWT revogáveis e throttles usam registros namespaced na tabela existente `django_session`.
+Não é necessária alteração de esquema: a API usa as tabelas Django já existentes e não apaga tabelas, usuários ou registros. O Supabase Auth valida a senha; para autorizar o painel, o e-mail confirmado precisa corresponder ao e-mail de um perfil administrativo ativo em `auth_user` e `requests_app_psychologistaccount`. As tabelas antigas de autenticação e sessões permanecem como dados PostgreSQL; os arquivos de migrations históricos também são mantidos. Após o login, a API emite uma sessão JWT revogável, armazenada em cookie HttpOnly; sessões e throttles usam a tabela existente `django_session`.
 
-Senhas Django existentes em `pbkdf2_sha256` continuam verificáveis. Novas contas administrativas usam `bcrypt_sha256`; não há endpoint de cadastro público. O cookie da sessão é HttpOnly, Secure em produção, SameSite=Lax e expira após 8 horas; alterações autenticadas exigem CSRF.
+Contas Supabase sem e-mail confirmado não podem entrar. Novas contas administrativas não são criadas pelo frontend: crie ou convide a usuária no Supabase Auth e mantenha o perfil administrativo correspondente no banco. O cookie da sessão é HttpOnly, Secure em produção, SameSite=Lax e expira após 8 horas; alterações autenticadas exigem CSRF.
 
 Cadastro público, recuperação e alteração de senha não faziam parte do backend anterior e, portanto, não foram inventados nesta migração. Não existe envio de e-mail: notificações de novas solicitações continuam sendo obtidas por polling enquanto o painel da psicóloga está aberto.
 

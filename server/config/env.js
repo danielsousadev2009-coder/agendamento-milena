@@ -48,6 +48,26 @@ export function getDatabaseConfig() {
   }
 }
 
+export function getSupabaseAuthConfig() {
+  const value = required('SUPABASE_URL')
+  let url
+  try {
+    url = new URL(value)
+  } catch (error) {
+    throw new Error('SUPABASE_URL must be a valid URL.', { cause: error })
+  }
+  if (!['http:', 'https:'].includes(url.protocol)
+    || url.username || url.password || url.search || url.hash
+    || url.pathname !== '/') {
+    throw new Error('SUPABASE_URL must contain only an HTTP(S) origin.')
+  }
+
+  return {
+    url: url.origin,
+    publishableKey: required('SUPABASE_PUBLISHABLE_KEY'),
+  }
+}
+
 function getSslConfig(mode) {
   if (mode === 'disable') return false
   if (mode === 'require') return { rejectUnauthorized: false }

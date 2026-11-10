@@ -3,7 +3,7 @@ import { getAllowedOrigins, getJwtSecret, isProduction } from '../config/env.js'
 import { pool } from '../config/database.js'
 import * as authRepository from '../repositories/auth.js'
 import { inTransaction } from '../utils/database.js'
-import { verifyPassword } from '../utils/crypto.js'
+import { signInWithSupabase } from './supabase-auth.js'
 
 const sessionLifetimeSeconds = 8 * 60 * 60
 const accessCookie = 'access_token'
@@ -120,9 +120,12 @@ export function requireCsrf(request, response, next) {
   next()
 }
 
-export async function authenticatePsychologist(username, password) {
-  const user = await authRepository.findPsychologistByUsername(pool, username)
-  if (!user || !user.is_active || !user.profile_active || !verifyPassword(password, user.password)) return null
+export async function authenticatePsychologist(email, password) {
+  const verifiedEmail = await signInWithSupabase(email, password)
+  if (!verifiedEmail) return null
+
+  const user = await authRepository.findPsychologistByEmail(pool, verifiedEmail)
+  if (!user) return null
 
   const sessionKey = randomBytes(24).toString('base64url')
   const expiresAt = new Date(Date.now() + sessionLifetimeSeconds * 1000)

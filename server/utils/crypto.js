@@ -1,13 +1,10 @@
 import {
   createCipheriv,
   createDecipheriv,
-  createHash,
   createHmac,
-  pbkdf2Sync,
   randomBytes,
   timingSafeEqual,
 } from 'node:crypto'
-import bcrypt from 'bcryptjs'
 
 function getKey(name, expectedBytes) {
   const value = process.env[name]
@@ -86,28 +83,4 @@ export function decryptValue(token) {
 
 export function maskCpf(cpf) {
   return `***.***.***-${cpf.slice(-2)}`
-}
-
-export function verifyPassword(password, encoded) {
-  if (encoded.startsWith('bcrypt_sha256$$')) {
-    const bcryptHash = encoded.slice('bcrypt_sha256$'.length)
-    const prehashed = createHash('sha256').update(password, 'utf8').digest('hex')
-    return bcrypt.compareSync(prehashed, bcryptHash)
-  }
-  if (/^\$2[aby]\$/.test(encoded)) return bcrypt.compareSync(password, encoded)
-
-  const [algorithm, iterations, salt, hash] = encoded.split('$')
-  if (algorithm !== 'pbkdf2_sha256' || !/^\d+$/.test(iterations) || !salt || !hash) return false
-
-  const count = Number(iterations)
-  const expected = Buffer.from(hash, 'base64')
-  if (!Number.isSafeInteger(count) || count < 1 || count > 2_000_000 || expected.length < 16) return false
-
-  const actual = pbkdf2Sync(password, salt, count, expected.length, 'sha256')
-  return actual.length === expected.length && timingSafeEqual(actual, expected)
-}
-
-export function hashPassword(password) {
-  const prehashed = createHash('sha256').update(password, 'utf8').digest('hex')
-  return `bcrypt_sha256$${bcrypt.hashSync(prehashed, 12)}`
 }

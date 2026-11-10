@@ -95,12 +95,15 @@ test('existing Supabase schema supports Node CRUD within a rolled-back transacti
     assert.equal((await authRepository.consumeRateLimit(client, rateLimitKey, 2, 60_000)).allowed, false)
 
     const activeUser = await client.query(
-      `SELECT u.id FROM auth_user AS u
+      `SELECT u.id, u.email FROM auth_user AS u
        JOIN requests_app_psychologistaccount AS p ON p.user_id = u.id
        WHERE u.is_active = TRUE AND p.active = TRUE LIMIT 1`,
     )
-    assert.equal(await authRepository.findPsychologistByUsername(client, `node-test-${randomBytes(8).toString('hex')}`), null)
+    assert.equal(await authRepository.findPsychologistByEmail(client, `node-test-${randomBytes(8).toString('hex')}@example.test`), null)
     if (activeUser.rows[0]) {
+      assert.ok(activeUser.rows[0].email)
+      const psychologist = await authRepository.findPsychologistByEmail(client, activeUser.rows[0].email)
+      assert.equal(String(psychologist.id), String(activeUser.rows[0].id))
       const sessionKey = randomBytes(24).toString('base64url')
       await authRepository.createSession(client, sessionKey, activeUser.rows[0].id, new Date(Date.now() + 60_000))
       const session = await authRepository.findActivePsychologistSession(client, sessionKey)

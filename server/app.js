@@ -1,5 +1,11 @@
 import express from 'express'
-import { getDatabaseConfig, getFrontendOrigin, getJwtSecret, isProduction } from './config/env.js'
+import {
+  getDatabaseConfig,
+  getFrontendOrigin,
+  getJwtSecret,
+  getSupabaseAuthConfig,
+  isProduction,
+} from './config/env.js'
 import apiRouter from './routes/api.js'
 import { corsPolicy } from './middlewares/cors.js'
 import { errorHandler, notFound } from './middlewares/errors.js'
@@ -7,6 +13,7 @@ import { errorHandler, notFound } from './middlewares/errors.js'
 getJwtSecret()
 getFrontendOrigin()
 getDatabaseConfig()
+getSupabaseAuthConfig()
 
 const app = express()
 app.disable('x-powered-by')

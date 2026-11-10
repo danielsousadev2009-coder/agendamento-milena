@@ -1,10 +1,13 @@
-export async function findPsychologistByUsername(client, username) {
+export async function findPsychologistByEmail(client, email) {
   const result = await client.query(
-    `SELECT u.id, u.password, u.is_active, p.id AS profile_id, p.active AS profile_active
+    `SELECT u.id, p.id AS profile_id
      FROM auth_user AS u
      JOIN requests_app_psychologistaccount AS p ON p.user_id = u.id
-     WHERE u.username = $1 LIMIT 1`,
-    [username],
+     WHERE LOWER(TRIM(u.email)) = LOWER($1)
+       AND u.is_active = TRUE
+       AND p.active = TRUE
+     LIMIT 1`,
+    [email],
   )
   return result.rows[0] ?? null
 }

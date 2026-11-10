@@ -71,9 +71,13 @@ export async function urgencyCreate(request, response) {
 }
 
 export async function adminLogin(request, response) {
-  const username = String(request.body?.username ?? '').slice(0, 150)
+  const email = String(request.body?.email ?? '').trim().slice(0, 254).toLowerCase()
   const password = String(request.body?.password ?? '')
-  const authenticated = await authenticatePsychologist(username, password)
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !password) {
+    response.status(400).json({ detail: 'Informe um e-mail e uma senha válidos.' })
+    return
+  }
+  const authenticated = await authenticatePsychologist(email, password)
   if (!authenticated) {
     response.status(400).json({ detail: 'Não foi possível entrar. Confira os dados ou tente mais tarde.' })
     return

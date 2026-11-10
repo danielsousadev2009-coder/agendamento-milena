@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { pbkdf2Sync, randomBytes } from 'node:crypto'
+import { randomBytes } from 'node:crypto'
 import { after, before, test } from 'node:test'
 
 process.env.NODE_ENV = 'test'
@@ -11,10 +11,13 @@ process.env.DB_NAME ??= 'test'
 process.env.DB_USER ??= 'test'
 process.env.DB_PASSWORD ??= 'test'
 process.env.DB_SSLMODE = 'disable'
+process.env.SUPABASE_URL ??= 'https://project.supabase.co'
+process.env.SUPABASE_PUBLISHABLE_KEY ??= 'sb_publishable_test_key'
 
-const { validateCpf, cpfDigest, decryptValue, encryptValue, hashPassword, verifyPassword } = await import('../server/utils/crypto.js')
+const { validateCpf, cpfDigest, decryptValue, encryptValue } = await import('../server/utils/crypto.js')
 const { validatePrivateIdentity, validateRequestCreate, validateRequestUpdate, validateUrgencyCreate } = await import('../server/validators/api.js')
-const { getDatabaseConfig } = await import('../server/config/env.js')
+const { getDatabaseConfig, getSupabaseAuthConfig } = await import('../server/config/env.js')
+const { signInWithSupabase } = await import('../server/services/supabase-auth.js')
 const { default: app } = await import('../server/app.js')
 const { default: vercelFunction } = await import('../api/[...path].js')
 const { default: vercelAdminFunction } = await import('../api/admin/[...path].js')
@@ -49,18 +52,6 @@ test('Fernet encryption is interoperable with existing Python ciphertexts', () =
   assert.throws(() => decryptValue(`${encrypted.slice(0, -2)}aa`), /could not be decrypted/)
 })
 
-test('legacy Django PBKDF2 hashes and new bcrypt-sha256 hashes authenticate', () => {
-  const password = 'Example-password-2026'
-  const salt = 'legacy-test-salt'
-  const digest = pbkdf2Sync(password, salt, 1_000, 32, 'sha256').toString('base64')
-  assert.equal(verifyPassword(password, `pbkdf2_sha256$1000$${salt}$${digest}`), true)
-  assert.equal(verifyPassword('wrong-password', `pbkdf2_sha256$1000$${salt}$${digest}`), false)
-  const newHash = hashPassword(password)
-  assert.match(newHash, /^bcrypt_sha256\$\$2[aby]\$/)
-  assert.equal(verifyPassword(password, newHash), true)
-  assert.equal(verifyPassword('wrong-password', newHash), false)
-})
-
 test('Supabase connection URLs retain transaction-pooler settings and encrypted TLS', () => {
   const previousUrl = process.env.DATABASE_URL
   const previousSslMode = process.env.DB_SSLMODE
@@ -79,6 +70,64 @@ test('Supabase connection URLs retain transaction-pooler settings and encrypted 
     if (previousSslMode === undefined) delete process.env.DB_SSLMODE
     else process.env.DB_SSLMODE = previousSslMode
   }
+})
+
+test('Supabase Auth config requires only the project URL and publishable key', () => {
+  const config = getSupabaseAuthConfig()
+  assert.equal(config.url, 'https://project.supabase.co')
+  assert.equal(config.publishableKey, 'sb_publishable_test_key')
+})
+
+test('Supabase Auth accepts only confirmed email sign-ins', async (context) => {
+  let request
+  context.mock.method(globalThis, 'fetch', async (url, options) => {
+    request = { url: String(url), body: JSON.parse(options.body) }
+    return new Response(JSON.stringify({
+      access_token: 'access-token',
+      token_type: 'bearer',
+      expires_in: 3600,
+      refresh_token: 'refresh-token',
+      user: {
+        id: 'auth-user-id',
+        email: 'admin@example.com',
+        email_confirmed_at: '2026-01-01T00:00:00Z',
+        app_metadata: { provider: 'email', providers: ['email'] },
+        user_metadata: {},
+        aud: 'authenticated',
+        created_at: '2026-01-01T00:00:00Z',
+      },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+  })
+
+  assert.equal(await signInWithSupabase('admin@example.com', 'correct-password'), 'admin@example.com')
+  assert.match(request.url, /\/auth\/v1\/token\?grant_type=password$/)
+  assert.deepEqual(request.body, {
+    email: 'admin@example.com',
+    password: 'correct-password',
+    gotrue_meta_security: {},
+  })
+})
+
+test('Supabase Auth rejects invalid credentials and unconfirmed email', async (context) => {
+  context.mock.method(globalThis, 'fetch', async () => (
+    new Response(JSON.stringify({ code: 'invalid_credentials', message: 'Invalid login credentials' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  ))
+  assert.equal(await signInWithSupabase('admin@example.com', 'wrong-password'), null)
+
+  context.mock.restoreAll()
+  context.mock.method(globalThis, 'fetch', async () => (
+    new Response(JSON.stringify({
+      access_token: 'access-token',
+      token_type: 'bearer',
+      expires_in: 3600,
+      refresh_token: 'refresh-token',
+      user: { id: 'auth-user-id', email: 'admin@example.com' },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+  ))
+  assert.equal(await signInWithSupabase('admin@example.com', 'correct-password'), null)
 })
 
 test('request validators retain required limits and normalized payload values', () => {
