@@ -25,3 +25,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Python cache and bytecode (legacy migration history remains source-controlled).
+__pycache__/
+*.py[cod]

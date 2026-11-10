@@ -1,63 +1,88 @@
 # Sistema de Acolhimento Psicológico Escolar
 
-Aplicação web com frontend React/Vite e API Django. O banco PostgreSQL pode ser hospedado no Supabase.
+Aplicação React/Vite com API REST em Node.js + Express e PostgreSQL no projeto Supabase existente. O frontend e a função da API são publicados sob a mesma origem na Vercel; não há servidor Express permanente.
 
-## Configuração do banco Supabase
+## Requisitos
 
-1. No Supabase, crie um projeto e obtenha os dados de conexão PostgreSQL em **Project Settings → Database**. Use o host, o usuário, a senha, o nome do banco e a porta fornecidos pelo Supabase. Para conexões diretas, o host normalmente usa a porta `5432`; se a rede não permitir conexão direta, configure o pooler indicado pelo Supabase.
-2. Na raiz do projeto, copie `.env.example` para `.env` e preencha as credenciais localmente. Não compartilhe nem envie o `.env` ao Git.
-3. Gere valores exclusivos para `DJANGO_SECRET_KEY`, `PII_ENCRYPTION_KEY` e `CPF_INDEX_KEY`. Exemplo de geração local da chave Fernet:
+- Node.js 22.12 ou superior e npm.
+- A URL de conexão PostgreSQL do projeto Supabase atual.
+- As chaves `PII_ENCRYPTION_KEY` e `CPF_INDEX_KEY` já usadas pelo banco. Não gere outras para uma instalação existente: isso impediria a leitura dos dados pessoais atuais.
+
+## Configuração local
+
+1. Copie `.env.example` para `.env`.
+2. Preencha `DATABASE_URL` com a conexão **Transaction pooler** do projeto Supabase existente. Use o host, o usuário, a senha e a porta mostrados pelo painel; não componha a URL manualmente. A porta usual do pooler de transação é `6543`.
+3. Configure `PII_ENCRYPTION_KEY` e `CPF_INDEX_KEY` com os valores atuais, preservando-os exatamente.
+4. Gere um `JWT_SECRET` exclusivo:
 
    ```powershell
-   Set-Location backend
-   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+   node -e "console.log(require('node:crypto').randomBytes(48).toString('base64url'))"
    ```
 
-   Gere `DJANGO_SECRET_KEY` e `CPF_INDEX_KEY` com valores aleatórios longos. Guarde as três chaves em local seguro: perder ou trocar as chaves de criptografia impede a leitura dos dados pessoais já armazenados.
-4. Instale as dependências do backend e aplique as migrações:
+5. Instale dependências:
 
    ```powershell
-   Set-Location backend
-   python -m pip install -r requirements.txt
-   python manage.py migrate
+   npm ci
    ```
 
-O backend carrega o `.env` da raiz do projeto. Se `DB_NAME` estiver configurado, conecta ao PostgreSQL; sem ele, usa SQLite local. A conexão PostgreSQL é fechada ao final de cada requisição para evitar acumular sessões no pooler compartilhado. `DJANGO_CSRF_TRUSTED_ORIGINS` deve conter as origens permitidas do frontend; o exemplo inclui as origens locais do Vite. Em produção, substitua-as pelas origens HTTPS reais. As migrações criam as tabelas do Django e do sistema, inicializam o contador da fila e protegem as tabelas contra acesso direto pelos papéis da API do Supabase. Para criar o acesso administrativo da psicóloga depois de conectar e migrar o banco, execute `python manage.py create_psychologist`.
+6. Abra dois terminais:
 
-## Notificações e painel da psicóloga
+   ```powershell
+   npm run dev:api
+   ```
 
-Enquanto a psicóloga estiver conectada ao painel, o sistema verifica a cada 30 segundos se chegaram novas solicitações e mostra os avisos na seção **Notificações**. Não é necessário configurar Gmail ou senha de app. Os avisos são exibidos no painel aberto; para recebê-los quando estiver desconectada, será necessário integrar um serviço externo de e-mail ou notificações.
+   ```powershell
+   npm run dev
+   ```
 
-Na área da psicóloga, a lista de chamada permite atualizar a situação do contato e alterar a posição com justificativa. Os pedidos de urgência têm seção própria para ler a descrição e registrar a avaliação e o encaminhamento.
+   O Vite encaminha `/api/*` para o Express local em `http://127.0.0.1:3000`.
 
-Não configure a chave `service_role` do Supabase no frontend. A aplicação acessa o PostgreSQL pelo backend Django usando as credenciais do banco.
+O servidor também aceita as variáveis legadas `DB_HOST`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_PORT` e `DB_SSLMODE`, portanto a configuração local atual pode ser reutilizada sem imprimir ou copiar credenciais. Para TLS, `require` cifra a conexão sem validar a CA do servidor, igual ao modo libpq `require`; `verify-full` valida certificado e nome do host e pode receber uma CA Base64 em `DB_SSL_CA`.
 
-## Publicação com Render e Vercel
+## Scripts
 
-O arquivo `render.yaml` prepara a API Django no Render e `vercel.json` configura o frontend Vite. A Vercel também encaminha as chamadas `/api/*` ao Render pelo endpoint em `api/`; isso mantém cookies de sessão e CSRF na mesma origem do site, sem depender de cookies de terceiros. Não defina `VITE_API_BASE_URL` na Vercel.
+| Comando | Uso |
+|---|---|
+| `npm run dev` | Frontend Vite |
+| `npm run dev:api` | API Express local |
+| `npm start` | API Express fora da Vercel |
+| `npm run build` | Build de produção do React |
+| `npm run lint` | Oxlint |
+| `npm test` | Testes unitários e HTTP |
+| `npm run test:db` | Teste PostgreSQL opt-in, com CRUD sintético dentro de transação revertida |
+| `npm run create:psychologist` | Cria a conta administrativa por terminal, sem exibir a senha |
 
-### 1. Publicar a API no Render
+Para executar o teste real do banco em PowerShell:
 
-1. Envie o projeto para um repositório GitHub e, no Render, crie um **Blueprint** a partir desse repositório. O Render detectará `render.yaml`.
-2. Preencha as variáveis marcadas como secretas usando os dados atuais do `.env` local e as credenciais do Supabase: `DJANGO_SECRET_KEY`, `PII_ENCRYPTION_KEY`, `CPF_INDEX_KEY`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` e `DB_HOST`. Use o host/porta e modo SSL indicados pelo Supabase; não coloque esses valores no Git.
-3. Aguarde o deploy ficar saudável em `/api/health/`. O comando de inicialização executa `migrate` antes de iniciar o Gunicorn. Mantenha uma instância enquanto usar o plano gratuito.
+```powershell
+$env:RUN_DB_INTEGRATION = 'true'
+npm run test:db
+Remove-Item Env:\RUN_DB_INTEGRATION
+```
 
-### 2. Publicar o frontend na Vercel
+O teste verifica a conexão e o esquema existente, cria registros exclusivamente sintéticos dentro de uma transação e termina com `ROLLBACK`. Não aplica migrations nem persiste esses registros.
 
-1. Importe o mesmo repositório na Vercel, mantendo a raiz do projeto na pasta principal. As configurações de build e saída já estão no `vercel.json`.
-2. Em **Settings → Environment Variables**, defina `BACKEND_URL` como a URL HTTPS pública do serviço Render, sem `/api` no final (por exemplo, `https://nome-do-servico.onrender.com`).
-3. Faça o deploy e anote o domínio de produção atribuído pela Vercel.
+## Deploy na Vercel
 
-### 3. Autorizar o domínio do site
+1. Importe o repositório com a raiz do projeto na pasta principal. O build configurado é `npm run build`, com saída em `dist`; `api/[...path].js` encaminha todas as rotas REST para uma única função Express.
+2. Configure as variáveis de ambiente na Vercel:
+   - `DATABASE_URL`: URL do **Transaction pooler** do mesmo projeto Supabase.
+   - `JWT_SECRET`: segredo aleatório exclusivo, com no mínimo 32 bytes.
+   - `FRONTEND_URL`: origem HTTPS exata do domínio de produção, sem caminho ou barra final.
+   - `PII_ENCRYPTION_KEY`: valor atual do banco, sem alteração.
+   - `CPF_INDEX_KEY`: valor atual do banco, sem alteração.
+   - `PG_POOL_MAX`: `1` recomendado para a função serverless.
+   - `DB_SSLMODE`: opcional; `require` cifra a conexão, `verify-full` valida certificado/host e aceita a CA Base64 em `DB_SSL_CA`.
+3. Faça o deploy e teste `/api/health/`, login e os fluxos do sistema no domínio publicado. O ambiente `Preview` também aceita a URL de deploy específica fornecida pela Vercel.
 
-No Render, defina `DJANGO_CSRF_TRUSTED_ORIGINS` com a origem exata do domínio de produção da Vercel, incluindo `https://` e sem barra final (por exemplo, `https://nome-do-projeto.vercel.app`). Não use curingas nem domínios de preview. Salve a variável e aguarde o novo deploy do backend.
+Não configure `BACKEND_URL`, `VITE_API_BASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` ou qualquer segredo como variável `VITE_*`. A API usa a mesma origem do frontend e acessa o PostgreSQL somente no servidor. CORS não é aberto a origens arbitrárias.
 
-### 4. Antes de abrir para usuários
+## Dados e autenticação
 
-- Redefina a senha temporária da psicóloga **antes de divulgar o site**. A senha temporária foi compartilhada durante a configuração anterior. No Shell do serviço Render, use `python manage.py changepassword NOME_DE_USUARIO`.
-- Se ainda não houver uma conta da psicóloga no banco, crie-a pelo Shell do Render com `python manage.py create_psychologist`.
-- Confirme que `/api/health/` responde com `{"status":"ok"}`, que o formulário grava uma solicitação e que o login/logout administrativo funciona no domínio de produção.
-- O Render gratuito pode suspender o serviço quando ocioso e causar demora na primeira solicitação. A instância gratuita é configurada para executar um worker, importante para respeitar o limite de conexões do pooler Supabase.
-- Notificações são exibidas apenas no painel aberto da psicóloga; não há envio de e-mail nem notificação quando ela está desconectada.
+Não é necessária alteração de esquema: a API usa as tabelas Django já existentes e não apaga tabelas, usuários ou registros. As tabelas antigas de autenticação e sessões permanecem como dados PostgreSQL; os arquivos de migrations históricos também são mantidos. Sessões JWT revogáveis e throttles usam registros namespaced na tabela existente `django_session`.
 
-Não publique se alguma variável de banco, chave de criptografia ou origem CSRF estiver faltando. Preserve `PII_ENCRYPTION_KEY` e `CPF_INDEX_KEY` já usadas pelo banco: trocar essas chaves pode tornar dados pessoais existentes ilegíveis.
+Senhas Django existentes em `pbkdf2_sha256` continuam verificáveis. Novas contas administrativas usam `bcrypt_sha256`; não há endpoint de cadastro público. O cookie da sessão é HttpOnly, Secure em produção, SameSite=Lax e expira após 8 horas; alterações autenticadas exigem CSRF.
+
+Cadastro público, recuperação e alteração de senha não faziam parte do backend anterior e, portanto, não foram inventados nesta migração. Não existe envio de e-mail: notificações de novas solicitações continuam sendo obtidas por polling enquanto o painel da psicóloga está aberto.
+
+Veja [MIGRATION-REPORT.md](./MIGRATION-REPORT.md) para a equivalência dos endpoints, tabelas, funcionalidades e limites de validação.

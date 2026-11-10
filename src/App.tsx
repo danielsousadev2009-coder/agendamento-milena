@@ -50,12 +50,12 @@ type RequestDetails = {
   history: Array<{ action: string; reason: string; created_at: string }>
 }
 
-const apiBase = import.meta.env.VITE_API_BASE_URL ?? ''
+const apiBase = '/api'
 
 async function requestApi<T>(path: string, body: unknown, method: 'POST' | 'PATCH' = 'POST'): Promise<T> {
-  await fetch(`${apiBase}/api/csrf/`, { credentials: 'include' })
+  await fetch(`${apiBase}/csrf/`, { credentials: 'include' })
   const csrfToken = document.cookie.match(/(?:^|; )csrftoken=([^;]+)/)?.[1]
-  const response = await fetch(`${apiBase}/api/${path}`, {
+  const response = await fetch(`${apiBase}/${path}`, {
     method,
     headers: { 'Content-Type': 'application/json', ...(csrfToken ? { 'X-CSRFToken': decodeURIComponent(csrfToken) } : {}) },
     credentials: 'include',
@@ -75,6 +75,10 @@ function validCpf(value: string) {
     return (remainder === 10 ? 0 : remainder) === Number(digits[length])
   }
   return check(9) && check(10)
+}
+
+function sanitizeCpfInput(value: string) {
+  return value.replace(/\D/g, '').slice(0, 11)
 }
 
 function App() {
@@ -193,15 +197,15 @@ function App() {
 
         {screen === 'request' && <section className="form-page"><button className="back-link" onClick={() => navigate('home')}>← Voltar ao início</button>{result ? <div className="success-panel"><span className="success-mark">✓</span><p className="eyebrow">Pedido registrado</p><h1>Obrigado por dar esse passo.</h1><p>Seu pedido foi registrado. As solicitações são organizadas por ordem de recebimento e a psicóloga analisará os pedidos conforme a disponibilidade de atendimento.</p>                <div className="protocol-box"><small>Seu protocolo</small><strong>{result.protocol}</strong></div><p className="form-hint">Guarde este código em um lugar seguro. Para consultar a solicitação, também será necessário confirmar sua identidade.</p><button className="button button-primary" onClick={() => navigate('lookup')}>Consultar solicitação</button></div> : <><p className="eyebrow">Solicitação de atendimento</p><h1>Vamos começar pelo básico.</h1><p className="form-lead">Preencha seus dados para registrar seu pedido. Não escolha data ou horário: a fila segue a ordem de recebimento.</p><form onSubmit={(event) => void submit(event, createRequest)} noValidate>
             <label>Nome completo<input autoComplete="name" value={fullName} onChange={(event) => setFullName(event.target.value)} required /></label>
-            <label>CPF<input inputMode="numeric" autoComplete="off" value={cpf} onChange={(event) => setCpf(event.target.value)} placeholder="000.000.000-00" required /></label>
+            <label>CPF<input inputMode="numeric" autoComplete="off" maxLength={11} pattern="[0-9]{11}" value={cpf} onChange={(event) => setCpf(sanitizeCpfInput(event.currentTarget.value))} placeholder="Somente números" required /></label>
             <label>Turma<input value={classroom} onChange={(event) => setClassroom(event.target.value)} placeholder="Ex.: 2º ano B" required /></label>
             {message && <p className="form-message" role="alert">{message}</p>}
             <button className="button button-primary form-submit" disabled={busy}>{busy ? 'Enviando…' : 'Registrar solicitação'} <span aria-hidden="true">↗</span></button>
           </form><p className="form-hint">Ao enviar, seus dados serão utilizados para organizar o pedido e permitir o acompanhamento pela profissional responsável.</p></>}</section>}
 
-        {screen === 'lookup' && <section className="form-page"><button className="back-link" onClick={() => navigate('home')}>← Voltar ao início</button><p className="eyebrow">Acompanhamento</p><h1>Consulte seu pedido.</h1><p className="form-lead">Informe o protocolo recebido ao solicitar atendimento e o CPF usado no pedido.</p><form onSubmit={(event) => void submit(event, lookupRequest)} noValidate><label>Protocolo<input autoComplete="off" value={protocol} onChange={(event) => setProtocol(event.target.value)} required /></label><label>CPF<input inputMode="numeric" autoComplete="off" value={cpf} onChange={(event) => setCpf(event.target.value)} placeholder="000.000.000-00" required /></label>{message && <p className="form-message" role="alert">{message}</p>}<button className="button button-primary form-submit" disabled={busy}>{busy ? 'Consultando…' : 'Consultar situação'}</button></form>{result && <div className="status-result"><span className="status-dot" /><div><small>Situação atual</small><strong>{result.status}</strong>{result.queue_position && <p>Posição informativa na fila: {result.queue_position}</p>}</div></div>}<button className="inline-link" onClick={() => navigate('urgency')}>Preciso de ajuda com urgência</button></section>}
+        {screen === 'lookup' && <section className="form-page"><button className="back-link" onClick={() => navigate('home')}>← Voltar ao início</button><p className="eyebrow">Acompanhamento</p><h1>Consulte seu pedido.</h1><p className="form-lead">Informe o protocolo recebido ao solicitar atendimento e o CPF usado no pedido.</p><form onSubmit={(event) => void submit(event, lookupRequest)} noValidate><label>Protocolo<input autoComplete="off" value={protocol} onChange={(event) => setProtocol(event.target.value)} required /></label><label>CPF<input inputMode="numeric" autoComplete="off" maxLength={11} pattern="[0-9]{11}" value={cpf} onChange={(event) => setCpf(sanitizeCpfInput(event.currentTarget.value))} placeholder="Somente números" required /></label>{message && <p className="form-message" role="alert">{message}</p>}<button className="button button-primary form-submit" disabled={busy}>{busy ? 'Consultando…' : 'Consultar situação'}</button></form>{result && <div className="status-result"><span className="status-dot" /><div><small>Situação atual</small><strong>{result.status}</strong>{result.queue_position && <p>Posição informativa na fila: {result.queue_position}</p>}</div></div>}<button className="inline-link" onClick={() => navigate('urgency')}>Preciso de ajuda com urgência</button></section>}
 
-        {screen === 'urgency' && <section className="form-page urgency-page"><button className="back-link" onClick={() => navigate('home')}>← Voltar ao início</button><p className="eyebrow">Pedido de avaliação</p><h1>Estamos ouvindo.</h1><p className="form-lead">Este canal permite que a psicóloga avalie um pedido de urgência. Envie apenas o necessário; sua mensagem não será exibida na consulta pública.</p><form onSubmit={(event) => void submit(event, sendUrgency)} noValidate><label>Protocolo<input autoComplete="off" value={protocol} onChange={(event) => setProtocol(event.target.value)} required /></label><label>CPF usado na solicitação<input inputMode="numeric" autoComplete="off" value={cpf} onChange={(event) => setCpf(event.target.value)} placeholder="000.000.000-00" required /></label><label>Conte brevemente o que está acontecendo<textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={5} maxLength={2000} required /><small>Compartilhe apenas o que considera necessário. Até 2.000 caracteres.</small></label>{message && <p className={message.startsWith('Sua solicitação') ? 'form-success' : 'form-message'} role="status">{message}</p>}<button className="button button-primary form-submit" disabled={busy}>{busy ? 'Enviando…' : 'Enviar para avaliação'}</button></form><div className="safety-note"><strong>Se houver perigo imediato</strong><p>Este canal não garante atendimento imediato. Se você ou outra pessoa estiver em perigo imediato, procure um adulto de confiança ou um serviço de emergência.</p></div></section>}
+        {screen === 'urgency' && <section className="form-page urgency-page"><button className="back-link" onClick={() => navigate('home')}>← Voltar ao início</button><p className="eyebrow">Pedido de avaliação</p><h1>Estamos ouvindo.</h1><p className="form-lead">Este canal permite que a psicóloga avalie um pedido de urgência. Envie apenas o necessário; sua mensagem não será exibida na consulta pública.</p><form onSubmit={(event) => void submit(event, sendUrgency)} noValidate><label>Protocolo<input autoComplete="off" value={protocol} onChange={(event) => setProtocol(event.target.value)} required /></label><label>CPF usado na solicitação<input inputMode="numeric" autoComplete="off" maxLength={11} pattern="[0-9]{11}" value={cpf} onChange={(event) => setCpf(sanitizeCpfInput(event.currentTarget.value))} placeholder="Somente números" required /></label><label>Conte brevemente o que está acontecendo<textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={5} maxLength={2000} required /><small>Compartilhe apenas o que considera necessário. Até 2.000 caracteres.</small></label>{message && <p className={message.startsWith('Sua solicitação') ? 'form-success' : 'form-message'} role="status">{message}</p>}<button className="button button-primary form-submit" disabled={busy}>{busy ? 'Enviando…' : 'Enviar para avaliação'}</button></form><div className="safety-note"><strong>Se houver perigo imediato</strong><p>Este canal não garante atendimento imediato. Se você ou outra pessoa estiver em perigo imediato, procure um adulto de confiança ou um serviço de emergência.</p></div></section>}
 
         {screen === 'admin' && <section className="form-page"><button className="back-link" onClick={() => navigate('home')}>← Voltar ao início</button><p className="eyebrow">Área restrita</p><h1>Acesso da psicóloga.</h1><p className="form-lead">Entre com as credenciais administrativas fornecidas pela instituição.</p><form onSubmit={(event) => void submit(event, login)} noValidate><label>Usuário ou e-mail<input autoComplete="username" value={username} onChange={(event) => setUsername(event.target.value)} required /></label><label>Senha<input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required /></label>{message && <p className="form-message" role="alert">{message}</p>}<button className="button button-primary form-submit" disabled={busy}>{busy ? 'Entrando…' : 'Entrar'}</button></form><p className="form-hint">Não há cadastro público. A conta deve ser criada por procedimento seguro no servidor.</p></section>}
 
@@ -246,8 +250,8 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
       if (filters.status) params.set('status', filters.status)
       const suffix = params.size ? `?${params.toString()}` : ''
       const [response, urgencyResponse] = await Promise.all([
-        fetch(`${apiBase}/api/admin/dashboard/${suffix}`, { credentials: 'include' }),
-        fetch(`${apiBase}/api/admin/urgencies/`, { credentials: 'include' }),
+        fetch(`${apiBase}/admin/dashboard/${suffix}`, { credentials: 'include' }),
+        fetch(`${apiBase}/admin/urgencies/`, { credentials: 'include' }),
       ])
       const [data, urgencyData] = await Promise.all([
         response.json().catch(() => ({})),
@@ -269,7 +273,7 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
   }
   async function checkForNewRequests() {
     try {
-      const response = await fetch(`${apiBase}/api/admin/dashboard/`, { credentials: 'include' })
+      const response = await fetch(`${apiBase}/admin/dashboard/`, { credentials: 'include' })
       const data = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(data.detail ?? 'Não foi possível verificar novas solicitações.')
       const requests = (data.requests ?? []) as NewRequestNotification[]
@@ -360,7 +364,7 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
     setNoteMessage('')
     setDetailsLoading(true)
     try {
-      const response = await fetch(`${apiBase}/api/admin/requests/${id}/`, { credentials: 'include' })
+      const response = await fetch(`${apiBase}/admin/requests/${id}/`, { credentials: 'include' })
       const data = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(data.detail ?? 'Não foi possível carregar os detalhes do atendimento.')
       const requestDetails = data as RequestDetails
@@ -384,7 +388,7 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
     setNoteMessage('')
     try {
       await requestApi(`admin/requests/${details.id}/`, { contact_note: noteDraft.trim() }, 'PATCH')
-      const response = await fetch(`${apiBase}/api/admin/requests/${details.id}/`, { credentials: 'include' })
+      const response = await fetch(`${apiBase}/admin/requests/${details.id}/`, { credentials: 'include' })
       const data = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(data.detail ?? 'O texto foi salvo, mas não foi possível atualizar os detalhes.')
       const updatedDetails = data as RequestDetails
