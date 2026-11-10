@@ -78,6 +78,28 @@ test('Supabase Auth config requires only the project URL and publishable key', (
   assert.equal(config.publishableKey, 'sb_publishable_test_key')
 })
 
+test('health route remains available when downstream service configuration is invalid', async () => {
+  const previousDatabaseUrl = process.env.DATABASE_URL
+  const previousSupabaseUrl = process.env.SUPABASE_URL
+  const previousPublishableKey = process.env.SUPABASE_PUBLISHABLE_KEY
+  process.env.DATABASE_URL = 'invalid-database-url'
+  delete process.env.SUPABASE_URL
+  delete process.env.SUPABASE_PUBLISHABLE_KEY
+
+  try {
+    const response = await fetch(`${baseUrl}/api/health/`)
+    assert.equal(response.status, 200)
+    assert.deepEqual(await response.json(), { status: 'ok' })
+  } finally {
+    if (previousDatabaseUrl === undefined) delete process.env.DATABASE_URL
+    else process.env.DATABASE_URL = previousDatabaseUrl
+    if (previousSupabaseUrl === undefined) delete process.env.SUPABASE_URL
+    else process.env.SUPABASE_URL = previousSupabaseUrl
+    if (previousPublishableKey === undefined) delete process.env.SUPABASE_PUBLISHABLE_KEY
+    else process.env.SUPABASE_PUBLISHABLE_KEY = previousPublishableKey
+  }
+})
+
 test('Supabase Auth accepts only confirmed email sign-ins', async (context) => {
   let request
   context.mock.method(globalThis, 'fetch', async (url, options) => {
