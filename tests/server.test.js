@@ -17,6 +17,7 @@ const { validatePrivateIdentity, validateRequestCreate, validateRequestUpdate, v
 const { getDatabaseConfig } = await import('../server/config/env.js')
 const { default: app } = await import('../server/app.js')
 const { default: vercelFunction } = await import('../api/[...path].js')
+const { default: vercelAdminFunction } = await import('../api/admin/[...path].js')
 
 let server
 let baseUrl
@@ -109,6 +110,7 @@ test('request validators retain required limits and normalized payload values', 
 
 test('Express API health and CSRF responses use same-origin secure defaults', async () => {
   assert.equal(vercelFunction, app)
+  assert.equal(vercelAdminFunction, app)
   const health = await fetch(`${baseUrl}/api/health/`)
   assert.equal(health.status, 200)
   assert.deepEqual(await health.json(), { status: 'ok' })

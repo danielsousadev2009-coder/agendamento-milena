@@ -15,6 +15,7 @@
     "start": "node server.js",
     "test": "node --test",
     "create:psychologist": "node scripts/create-psychologist.js",
+    "reset:psychologist-password": "node scripts/reset-psychologist-password.js",
     "test:db": "node --test tests/database.integration.test.js"
   },
   "dependencies": {

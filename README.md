@@ -51,6 +51,9 @@ O servidor também aceita as variáveis legadas `DB_HOST`, `DB_NAME`, `DB_USER`,
 | `npm test` | Testes unitários e HTTP |
 | `npm run test:db` | Teste PostgreSQL opt-in, com CRUD sintético dentro de transação revertida |
 | `npm run create:psychologist` | Cria a conta administrativa por terminal, sem exibir a senha |
+| `npm run reset:psychologist-password` | Redefine a senha de uma conta administrativa existente |
+
+Para redefinir uma senha esquecida, configure no `.env` uma conexão válida com o banco e execute `npm run reset:psychologist-password` em um terminal. O comando solicita o usuário e a nova senha sem exibi-la, atualiza apenas uma conta administrativa ativa e encerra as sessões anteriores dessa conta. Não execute esse comando em terminais ou ambientes compartilhados.
 
 Para executar o teste real do banco em PowerShell:
 
