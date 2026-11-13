@@ -83,7 +83,7 @@ export async function insertUrgency(client, requestId, encryptedDescription) {
 
 export async function listRequests(client) {
   const result = await client.query(
-    `SELECT id, full_name, cpf_ciphertext, classroom, protocol, received_at,
+    `SELECT id, full_name, classroom, protocol, received_at,
       status, queue_order, contact_status, contacted_at, contact_note
      FROM requests_app_counselingrequest
      ORDER BY queue_order, received_at`,

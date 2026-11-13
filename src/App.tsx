@@ -224,6 +224,7 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
   const [notifications, setNotifications] = useState<NewRequestNotification[]>([])
   const knownRequestIds = useRef<Set<number> | null>(null)
   const [urgencies, setUrgencies] = useState<UrgencyItem[]>([])
+  const [urgencyError, setUrgencyError] = useState('')
   const [counts, setCounts] = useState<Record<RequestStatus, number>>({ waiting: 0, review: 0, in_progress: 0, completed: 0, cancelled: 0 })
   const [pendingUrgencies, setPendingUrgencies] = useState(0)
   const [loaded, setLoaded] = useState(false)
@@ -244,30 +245,43 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
   const [evaluatingUrgencyId, setEvaluatingUrgencyId] = useState<number | null>(null)
   async function load(filters = { query, status: statusFilter }) {
     setLoaded(false)
+    setUrgencyError('')
     try {
       const params = new URLSearchParams()
       if (filters.query.trim()) params.set('q', filters.query.trim())
       if (filters.status) params.set('status', filters.status)
       const suffix = params.size ? `?${params.toString()}` : ''
-      const [response, urgencyResponse] = await Promise.all([
+      const [dashboardResult, urgenciesResult] = await Promise.allSettled([
         fetch(`${apiBase}/admin/dashboard/${suffix}`, { credentials: 'include' }),
         fetch(`${apiBase}/admin/urgencies/`, { credentials: 'include' }),
       ])
-      const [data, urgencyData] = await Promise.all([
-        response.json().catch(() => ({})),
-        urgencyResponse.json().catch(() => ({})),
-      ])
+      if (dashboardResult.status === 'rejected') throw dashboardResult.reason
+      const response = dashboardResult.value
+      const data = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(data.detail ?? 'Sessão expirada ou acesso não autorizado.')
-      if (!urgencyResponse.ok) throw new Error(urgencyData.detail ?? 'Não foi possível carregar os pedidos de urgência.')
       setItems(data.requests ?? [])
       setCallList(data.call_list ?? [])
       if (knownRequestIds.current === null) {
         knownRequestIds.current = new Set((data.requests ?? []).map((request: NewRequestNotification) => request.id))
       }
-      setUrgencies(urgencyData.urgencies ?? [])
       setCounts({ waiting: 0, review: 0, in_progress: 0, completed: 0, cancelled: 0, ...data.counts })
       setPendingUrgencies(data.pending_urgencies ?? 0)
       setError('')
+      if (urgenciesResult.status === 'rejected') {
+        setUrgencies([])
+        setUrgencyError(urgenciesResult.reason instanceof Error
+          ? urgenciesResult.reason.message
+          : 'Não foi possível carregar os pedidos de urgência.')
+      } else {
+        const urgencyResponse = urgenciesResult.value
+        const urgencyData = await urgencyResponse.json().catch(() => ({}))
+        if (!urgencyResponse.ok) {
+          setUrgencies([])
+          setUrgencyError(urgencyData.detail ?? 'Não foi possível carregar os pedidos de urgência.')
+        } else {
+          setUrgencies(urgencyData.urgencies ?? [])
+        }
+      }
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível carregar os pedidos.') }
     finally { setLoaded(true) }
   }
@@ -483,9 +497,9 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
       <section className="urgency-section" aria-labelledby="urgency-list-title">
         <div className="admin-section-title">
           <div><p className="eyebrow">Avaliação da psicóloga</p><h2 id="urgency-list-title">Pedidos de urgência</h2></div>
-          <span>{urgencies.filter((item) => item.evaluation === 'pending').length} aguardando avaliação</span>
+          <span>{urgencyError ? 'Avaliação indisponível' : `${urgencies.filter((item) => item.evaluation === 'pending').length} aguardando avaliação`}</span>
         </div>
-        {urgencies.length ? <div className="urgency-list">{urgencies.map((urgency) => (
+        {urgencyError ? <p role="alert" className="form-message">{urgencyError}</p> : urgencies.length ? <div className="urgency-list">{urgencies.map((urgency) => (
           <UrgencyReviewCard
             key={urgency.id}
             urgency={urgency}
