@@ -4,7 +4,7 @@ import milenaPhoto from './assets/milena_img-removebg-preview.png'
 import './App.css'
 
 type Screen = 'home' | 'request' | 'lookup' | 'urgency' | 'admin' | 'dashboard'
-type RequestResult = { protocol: string; status: string; queue_position?: number }
+type RequestResult = { protocol: string; status: string; queue_position?: number; completed_at?: string }
 type RequestStatus = 'waiting' | 'review' | 'in_progress' | 'completed' | 'cancelled'
 type ContactStatus = 'not_started' | 'contacted' | 'awaiting_response'
 type UrgencyEvaluation = 'pending' | 'confirmed' | 'not_urgent' | 'more_info'
@@ -45,17 +45,16 @@ type RequestDetails = {
   status: RequestStatus
   contact_status: 'not_started' | 'contacted' | 'awaiting_response'
   contacted_at: string | null
+  completed_at: string | null
   contact_note: string
   received_at: string
   history: Array<{ action: string; reason: string; created_at: string }>
 }
 
-const apiBase = import.meta.env.VITE_API_BASE_URL ?? ''
-
 async function requestApi<T>(path: string, body: unknown, method: 'POST' | 'PATCH' = 'POST'): Promise<T> {
-  await fetch(`${apiBase}/api/csrf/`, { credentials: 'include' })
+  await fetch('/api/csrf/', { credentials: 'include' })
   const csrfToken = document.cookie.match(/(?:^|; )csrftoken=([^;]+)/)?.[1]
-  const response = await fetch(`${apiBase}/api/${path}`, {
+  const response = await fetch(`/api/${path}`, {
     method,
     headers: { 'Content-Type': 'application/json', ...(csrfToken ? { 'X-CSRFToken': decodeURIComponent(csrfToken) } : {}) },
     credentials: 'include',
@@ -77,8 +76,24 @@ function validCpf(value: string) {
   return check(9) && check(10)
 }
 
+const requestStatusLabels: Record<RequestStatus, string> = {
+  waiting: 'Aguardando',
+  review: 'Em análise',
+  in_progress: 'Em atendimento',
+  completed: 'Atendido',
+  cancelled: 'Cancelado',
+}
+
+function getRequestStatusLabel(status: string) {
+  return Object.hasOwn(requestStatusLabels, status)
+    ? requestStatusLabels[status as RequestStatus]
+    : status
+}
+
 function App() {
   const [screen, setScreen] = useState<Screen>('home')
+  const [sessionChecking, setSessionChecking] = useState(true)
+  const [sessionError, setSessionError] = useState('')
   const [fullName, setFullName] = useState('')
   const [cpf, setCpf] = useState('')
   const [classroom, setClassroom] = useState('')
@@ -90,9 +105,36 @@ function App() {
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
 
+  useEffect(() => {
+    let active = true
+    async function restoreSession() {
+      try {
+        const response = await fetch('/api/admin/session/', { credentials: 'include' })
+        if (response.ok) {
+          if (active) setScreen('dashboard')
+          return
+        }
+        if (response.status !== 403) {
+          const payload = await response.json().catch(() => ({}))
+          throw new Error(payload.detail ?? 'Não foi possível verificar sua sessão.')
+        }
+      } catch (error) {
+        if (active) {
+          setSessionError(error instanceof Error ? error.message : 'Não foi possível verificar sua sessão.')
+        }
+      } finally {
+        if (active) setSessionChecking(false)
+      }
+    }
+
+    void restoreSession()
+    return () => { active = false }
+  }, [])
+
   function navigate(next: Screen) {
     setScreen(next)
     setMessage('')
+    setSessionError('')
     setResult(null)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
@@ -109,7 +151,7 @@ function App() {
   async function createRequest() {
     if (fullName.trim().split(/\s+/).length < 2) throw new Error('Informe seu nome completo.')
     if (!validCpf(cpf)) throw new Error('Confira os números do CPF informado.')
-    if (!classroom.trim()) throw new Error('Informe sua turma.')
+    if (!classroom.trim()) throw new Error('Informe o número da sala.')
     const response = await requestApi<{ protocol: string }>('requests/', { full_name: fullName, cpf, classroom })
     setProtocol(response.protocol)
     setResult({ protocol: response.protocol, status: 'Aguardando' })
@@ -155,6 +197,10 @@ function App() {
       </header>
 
       <main>
+        {sessionError && <p className="form-message" role="alert">{sessionError}</p>}
+        {sessionChecking ? (
+          <section className="form-page"><p className="form-lead" role="status">Verificando sua sessão…</p></section>
+        ) : <>
         {screen === 'home' && <>
           <section className="hero-section">
             <div className="hero-copy">
@@ -183,7 +229,7 @@ function App() {
           <section className="info-section" id="como-funciona">
             <div className="section-heading"><p className="eyebrow">Como funciona</p><h2>Um passo de cada vez.</h2></div>
             <div className="steps-grid">
-              <article><span>01</span><h3>Você solicita</h3><p>Preencha apenas seu nome, CPF e turma. Não é necessário explicar sua situação nesse primeiro momento.</p></article>
+              <article><span>01</span><h3>Você solicita</h3><p>Preencha apenas seu nome, CPF e número da sala. Não é necessário explicar sua situação nesse primeiro momento.</p></article>
               <article><span>02</span><h3>A psicóloga analisa</h3><p>Os pedidos seguem a ordem de chegada e são considerados conforme a disponibilidade de atendimento.</p></article>
               <article><span>03</span><h3>Você acompanha</h3><p>Guarde seu protocolo. Você poderá consultar o andamento usando também o CPF para confirmar sua identidade.</p></article>
             </div>
@@ -193,19 +239,20 @@ function App() {
 
         {screen === 'request' && <section className="form-page"><button className="back-link" onClick={() => navigate('home')}>← Voltar ao início</button>{result ? <div className="success-panel"><span className="success-mark">✓</span><p className="eyebrow">Pedido registrado</p><h1>Obrigado por dar esse passo.</h1><p>Seu pedido foi registrado. As solicitações são organizadas por ordem de recebimento e a psicóloga analisará os pedidos conforme a disponibilidade de atendimento.</p>                <div className="protocol-box"><small>Seu protocolo</small><strong>{result.protocol}</strong></div><p className="form-hint">Guarde este código em um lugar seguro. Para consultar a solicitação, também será necessário confirmar sua identidade.</p><button className="button button-primary" onClick={() => navigate('lookup')}>Consultar solicitação</button></div> : <><p className="eyebrow">Solicitação de atendimento</p><h1>Vamos começar pelo básico.</h1><p className="form-lead">Preencha seus dados para registrar seu pedido. Não escolha data ou horário: a fila segue a ordem de recebimento.</p><form onSubmit={(event) => void submit(event, createRequest)} noValidate>
             <label>Nome completo<input autoComplete="name" value={fullName} onChange={(event) => setFullName(event.target.value)} required /></label>
-            <label>CPF<input inputMode="numeric" autoComplete="off" value={cpf} onChange={(event) => setCpf(event.target.value)} placeholder="000.000.000-00" required /></label>
-            <label>Turma<input value={classroom} onChange={(event) => setClassroom(event.target.value)} placeholder="Ex.: 2º ano B" required /></label>
+            <label>CPF<input inputMode="numeric" pattern="[0-9]{11}" autoComplete="off" value={cpf} onChange={(event) => setCpf(event.target.value.replace(/\D/gu, '').slice(0, 11))} placeholder="Somente números" required /></label>
+            <label>Sala<input inputMode="numeric" pattern="[0-9]*" autoComplete="off" value={classroom} onChange={(event) => setClassroom(event.target.value.replace(/\D/gu, ''))} placeholder="Somente números (ex.: 2)" required /></label>
             {message && <p className="form-message" role="alert">{message}</p>}
             <button className="button button-primary form-submit" disabled={busy}>{busy ? 'Enviando…' : 'Registrar solicitação'} <span aria-hidden="true">↗</span></button>
           </form><p className="form-hint">Ao enviar, seus dados serão utilizados para organizar o pedido e permitir o acompanhamento pela profissional responsável.</p></>}</section>}
 
-        {screen === 'lookup' && <section className="form-page"><button className="back-link" onClick={() => navigate('home')}>← Voltar ao início</button><p className="eyebrow">Acompanhamento</p><h1>Consulte seu pedido.</h1><p className="form-lead">Informe o protocolo recebido ao solicitar atendimento e o CPF usado no pedido.</p><form onSubmit={(event) => void submit(event, lookupRequest)} noValidate><label>Protocolo<input autoComplete="off" value={protocol} onChange={(event) => setProtocol(event.target.value)} required /></label><label>CPF<input inputMode="numeric" autoComplete="off" value={cpf} onChange={(event) => setCpf(event.target.value)} placeholder="000.000.000-00" required /></label>{message && <p className="form-message" role="alert">{message}</p>}<button className="button button-primary form-submit" disabled={busy}>{busy ? 'Consultando…' : 'Consultar situação'}</button></form>{result && <div className="status-result"><span className="status-dot" /><div><small>Situação atual</small><strong>{result.status}</strong>{result.queue_position && <p>Posição informativa na fila: {result.queue_position}</p>}</div></div>}<button className="inline-link" onClick={() => navigate('urgency')}>Preciso de ajuda com urgência</button></section>}
+        {screen === 'lookup' && <section className="form-page"><button className="back-link" onClick={() => navigate('home')}>← Voltar ao início</button><p className="eyebrow">Acompanhamento</p><h1>Consulte seu pedido.</h1><p className="form-lead">Informe o protocolo recebido ao solicitar atendimento e o CPF usado no pedido. O protocolo ajuda a proteger seus dados.</p><form onSubmit={(event) => void submit(event, lookupRequest)} noValidate><label>Protocolo<input autoComplete="off" value={protocol} onChange={(event) => setProtocol(event.target.value)} required /></label><label>CPF<input inputMode="numeric" pattern="[0-9]{11}" autoComplete="off" value={cpf} onChange={(event) => setCpf(event.target.value.replace(/\D/gu, '').slice(0, 11))} placeholder="Somente números" required /></label>{message && <p className="form-message" role="alert">{message}</p>}<button className="button button-primary form-submit" disabled={busy}>{busy ? 'Consultando…' : 'Consultar situação'}</button></form>{result && <div className="status-result"><span className="status-dot" /><div><small>Situação atual</small><strong>{getRequestStatusLabel(result.status)}</strong>{result.queue_position && <p>Posição informativa na fila: {result.queue_position}</p>}{result.completed_at && <p>Atendimento realizado em {new Date(result.completed_at).toLocaleString('pt-BR')}</p>}</div></div>}<button className="inline-link" onClick={() => navigate('urgency')}>Preciso de ajuda com urgência</button></section>}
 
-        {screen === 'urgency' && <section className="form-page urgency-page"><button className="back-link" onClick={() => navigate('home')}>← Voltar ao início</button><p className="eyebrow">Pedido de avaliação</p><h1>Estamos ouvindo.</h1><p className="form-lead">Este canal permite que a psicóloga avalie um pedido de urgência. Envie apenas o necessário; sua mensagem não será exibida na consulta pública.</p><form onSubmit={(event) => void submit(event, sendUrgency)} noValidate><label>Protocolo<input autoComplete="off" value={protocol} onChange={(event) => setProtocol(event.target.value)} required /></label><label>CPF usado na solicitação<input inputMode="numeric" autoComplete="off" value={cpf} onChange={(event) => setCpf(event.target.value)} placeholder="000.000.000-00" required /></label><label>Conte brevemente o que está acontecendo<textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={5} maxLength={2000} required /><small>Compartilhe apenas o que considera necessário. Até 2.000 caracteres.</small></label>{message && <p className={message.startsWith('Sua solicitação') ? 'form-success' : 'form-message'} role="status">{message}</p>}<button className="button button-primary form-submit" disabled={busy}>{busy ? 'Enviando…' : 'Enviar para avaliação'}</button></form><div className="safety-note"><strong>Se houver perigo imediato</strong><p>Este canal não garante atendimento imediato. Se você ou outra pessoa estiver em perigo imediato, procure um adulto de confiança ou um serviço de emergência.</p></div></section>}
+        {screen === 'urgency' && <section className="form-page urgency-page"><button className="back-link" onClick={() => navigate('home')}>← Voltar ao início</button><p className="eyebrow">Pedido de avaliação</p><h1>Estamos ouvindo.</h1><p className="form-lead">Este canal permite que a psicóloga avalie um pedido de urgência. Envie apenas o necessário; sua mensagem não será exibida na consulta pública.</p><form onSubmit={(event) => void submit(event, sendUrgency)} noValidate><label>Protocolo<input autoComplete="off" value={protocol} onChange={(event) => setProtocol(event.target.value)} required /></label><label>CPF usado na solicitação<input inputMode="numeric" pattern="[0-9]{11}" autoComplete="off" value={cpf} onChange={(event) => setCpf(event.target.value.replace(/\D/gu, '').slice(0, 11))} placeholder="Somente números" required /></label><label>Conte brevemente o que está acontecendo<textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={5} maxLength={2000} required /><small>Compartilhe apenas o que considera necessário. Até 2.000 caracteres.</small></label>{message && <p className={message.startsWith('Sua solicitação') ? 'form-success' : 'form-message'} role="status">{message}</p>}<button className="button button-primary form-submit" disabled={busy}>{busy ? 'Enviando…' : 'Enviar para avaliação'}</button></form><div className="safety-note"><strong>Se houver perigo imediato</strong><p>Este canal não garante atendimento imediato. Se você ou outra pessoa estiver em perigo imediato, procure um adulto de confiança ou um serviço de emergência.</p></div></section>}
 
         {screen === 'admin' && <section className="form-page"><button className="back-link" onClick={() => navigate('home')}>← Voltar ao início</button><p className="eyebrow">Área restrita</p><h1>Acesso da psicóloga.</h1><p className="form-lead">Entre com as credenciais administrativas fornecidas pela instituição.</p><form onSubmit={(event) => void submit(event, login)} noValidate><label>Usuário ou e-mail<input autoComplete="username" value={username} onChange={(event) => setUsername(event.target.value)} required /></label><label>Senha<input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required /></label>{message && <p className="form-message" role="alert">{message}</p>}<button className="button button-primary form-submit" disabled={busy}>{busy ? 'Entrando…' : 'Entrar'}</button></form><p className="form-hint">Não há cadastro público. A conta deve ser criada por procedimento seguro no servidor.</p></section>}
 
-        {screen === 'dashboard' && <AdminDashboard onLogout={() => { void requestApi('admin/logout/', {}).finally(() => navigate('home')) }} />}
+        {screen === 'dashboard' && <AdminDashboard onLogout={async () => { await requestApi('admin/logout/', {}); navigate('home') }} />}
+        </>}
       </main>
 
       <footer className="footer"><button className="brand footer-brand" onClick={() => navigate('home')}><span className="brand-mark" aria-hidden="true"><i /><i /><i /></span><span><strong>Acolhimento</strong><small>Atendimento psicológico escolar</small></span></button><p>Um espaço de escuta, cuidado e respeito.</p><span>© Atendimento psicológico escolar</span></footer>
@@ -213,8 +260,9 @@ function App() {
   )
 }
 
-function AdminDashboard({ onLogout }: { onLogout: () => void }) {
+function AdminDashboard({ onLogout }: { onLogout: () => Promise<void> }) {
   const [error, setError] = useState('')
+  const [loggingOut, setLoggingOut] = useState(false)
   const [items, setItems] = useState<Array<{ id: number; full_name: string; classroom: string; status: RequestStatus; protocol: string; received_at: string; queue_position: number | null }>>([])
   const [callList, setCallList] = useState<CallListItem[]>([])
   const [notifications, setNotifications] = useState<NewRequestNotification[]>([])
@@ -246,8 +294,8 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
       if (filters.status) params.set('status', filters.status)
       const suffix = params.size ? `?${params.toString()}` : ''
       const [response, urgencyResponse] = await Promise.all([
-        fetch(`${apiBase}/api/admin/dashboard/${suffix}`, { credentials: 'include' }),
-        fetch(`${apiBase}/api/admin/urgencies/`, { credentials: 'include' }),
+        fetch(`/api/admin/dashboard/${suffix}`, { credentials: 'include' }),
+        fetch('/api/admin/urgencies/', { credentials: 'include' }),
       ])
       const [data, urgencyData] = await Promise.all([
         response.json().catch(() => ({})),
@@ -269,7 +317,7 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
   }
   async function checkForNewRequests() {
     try {
-      const response = await fetch(`${apiBase}/api/admin/dashboard/`, { credentials: 'include' })
+      const response = await fetch('/api/admin/dashboard/', { credentials: 'include' })
       const data = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(data.detail ?? 'Não foi possível verificar novas solicitações.')
       const requests = (data.requests ?? []) as NewRequestNotification[]
@@ -307,6 +355,10 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
     } finally {
       setUpdatingId(null)
     }
+  }
+  async function markAsAttended(item: CallListItem) {
+    if (!window.confirm(`Confirmar que o atendimento de ${item.full_name} foi realizado?`)) return
+    await updateStatus(item.id, 'completed')
   }
   async function updateContactStatus(id: number, contact_status: ContactStatus) {
     setUpdatingId(id)
@@ -352,6 +404,17 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
       setEvaluatingUrgencyId(null)
     }
   }
+  async function logout() {
+    setLoggingOut(true)
+    setError('')
+    try {
+      await onLogout()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Não foi possível encerrar a sessão.')
+    } finally {
+      setLoggingOut(false)
+    }
+  }
   async function showDetails(id: number) {
     setDetails(null)
     setDetailsError('')
@@ -360,7 +423,7 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
     setNoteMessage('')
     setDetailsLoading(true)
     try {
-      const response = await fetch(`${apiBase}/api/admin/requests/${id}/`, { credentials: 'include' })
+      const response = await fetch(`/api/admin/requests/${id}/`, { credentials: 'include' })
       const data = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(data.detail ?? 'Não foi possível carregar os detalhes do atendimento.')
       const requestDetails = data as RequestDetails
@@ -384,7 +447,7 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
     setNoteMessage('')
     try {
       await requestApi(`admin/requests/${details.id}/`, { contact_note: noteDraft.trim() }, 'PATCH')
-      const response = await fetch(`${apiBase}/api/admin/requests/${details.id}/`, { credentials: 'include' })
+      const response = await fetch(`/api/admin/requests/${details.id}/`, { credentials: 'include' })
       const data = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(data.detail ?? 'O texto foi salvo, mas não foi possível atualizar os detalhes.')
       const updatedDetails = data as RequestDetails
@@ -419,7 +482,7 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
     <section className="admin-page">
       <div className="admin-heading">
         <div><p className="eyebrow">Painel da psicóloga</p><h1>Fila de atendimento</h1><p className="form-lead">Acompanhe os pedidos e atualize o andamento dos atendimentos.</p></div>
-        <button className="button button-secondary" onClick={onLogout}>Encerrar sessão</button>
+        <button className="button button-secondary" disabled={loggingOut} onClick={() => void logout()}>{loggingOut ? 'Encerrando…' : 'Encerrar sessão'}</button>
       </div>
       {error && <p role="alert" className="form-message">{error}</p>}
       <section className="notification-panel" aria-labelledby="notifications-title">
@@ -431,7 +494,7 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
           {notifications.map((notification) => (
             <li key={notification.id}>
               <span className="notification-indicator" aria-hidden="true" />
-              <div><strong>Nova solicitação de {notification.full_name}</strong><span>Turma {notification.classroom} · {notification.protocol} · {new Date(notification.received_at).toLocaleString('pt-BR')}</span></div>
+              <div><strong>Nova solicitação de {notification.full_name}</strong><span>Sala {notification.classroom} · {notification.protocol} · {new Date(notification.received_at).toLocaleString('pt-BR')}</span></div>
               <button aria-label={`Dispensar aviso de ${notification.full_name}`} onClick={() => setNotifications((current) => current.filter((item) => item.id !== notification.id))}>Dispensar</button>
             </li>
           ))}
@@ -456,12 +519,15 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
             {callList.map((item) => (
               <li key={item.id} className={item.queue_position === 1 ? 'call-list-next' : undefined}>
                 <span className="call-list-position" aria-label={`Posição ${item.queue_position}`}>{item.queue_position}</span>
-                <div className="call-list-person"><strong>{item.full_name}</strong><span>Turma {item.classroom} · Pedido recebido em {new Date(item.received_at).toLocaleString('pt-BR')}</span></div>
+                <div className="call-list-person"><strong>{item.full_name}</strong><span>Sala {item.classroom} · Pedido recebido em {new Date(item.received_at).toLocaleString('pt-BR')}</span></div>
                   <div className="call-list-status">
                     <strong>{item.queue_position === 1 ? 'Próximo da fila' : statusLabels[item.status]}</strong>
                     <select aria-label={`Contato de ${item.full_name}`} value={item.contact_status} disabled={updatingId === item.id} onChange={(event) => void updateContactStatus(item.id, event.target.value as ContactStatus)}>
                       {Object.entries(contactStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                     </select>
+                    <button className="button button-primary attended-button" disabled={updatingId === item.id} onClick={() => void markAsAttended(item)}>
+                      {updatingId === item.id ? 'Salvando…' : 'Marcar atendimento realizado'}
+                    </button>
                     <button className="details-button" onClick={() => { setQueueMoveId(queueMoveId === item.id ? null : item.id); setQueuePosition(String(item.queue_position)); setQueueReason('') }}>Alterar posição</button>
                   </div>
                   {queueMoveId === item.id && (
@@ -493,14 +559,14 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
       </section>
       <div className="admin-section-title"><h2>Solicitações</h2><button onClick={() => { setError(''); void load() }}>Atualizar fila</button></div>
       <form className="dashboard-filters" onSubmit={(event) => { event.preventDefault(); void load() }}>
-        <label>Buscar por nome ou turma<input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Digite para buscar" /></label>
+        <label>Buscar por nome ou sala<input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Digite para buscar" /></label>
         <label>Filtrar por status<select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">Todos os status</option>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
         <button className="button button-primary" disabled={!loaded}>{loaded ? 'Filtrar' : 'Carregando…'}</button>
       </form>
       {items.length ? (
         <div className="table-wrap">
           <table>
-            <thead><tr><th>Aluno</th><th>Turma</th><th>Recebido</th><th>Protocolo</th><th>Status</th><th>Posição</th><th>Detalhes</th></tr></thead>
+            <thead><tr><th>Aluno</th><th>Sala</th><th>Recebido</th><th>Protocolo</th><th>Status</th><th>Posição</th><th>Detalhes</th></tr></thead>
             <tbody>{items.map((item) => (
               <tr key={item.id}>
                 <td>{item.full_name}</td>
@@ -533,13 +599,14 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
                 <div id="details-summary-panel" role="tabpanel" aria-labelledby="details-summary-tab">
                   <dl className="details-grid">
                     <div><dt>Aluno</dt><dd>{details.full_name}</dd></div>
-                    <div><dt>Turma</dt><dd>{details.classroom}</dd></div>
+                    <div><dt>Sala</dt><dd>{details.classroom}</dd></div>
                     <div><dt>CPF</dt><dd>{details.cpf_masked}</dd></div>
                     <div><dt>Protocolo</dt><dd>{details.protocol}</dd></div>
                     <div><dt>Status</dt><dd>{statusLabels[details.status]}</dd></div>
                     <div><dt>Solicitado em</dt><dd>{new Date(details.received_at).toLocaleString('pt-BR')}</dd></div>
                     <div><dt>Situação do contato</dt><dd>{{ not_started: 'Não iniciado', contacted: 'Contato realizado', awaiting_response: 'Aguardando resposta' }[details.contact_status]}</dd></div>
                     {details.contacted_at && <div><dt>Contato realizado em</dt><dd>{new Date(details.contacted_at).toLocaleString('pt-BR')}</dd></div>}
+                    {details.completed_at && <div><dt>Atendimento realizado em</dt><dd>{new Date(details.completed_at).toLocaleString('pt-BR')}</dd></div>}
                     <div className="details-wide"><dt>Texto do atendimento</dt><dd>{details.contact_note || 'Nenhum texto registrado.'}</dd></div>
                   </dl>
                   <div className="details-history">
@@ -588,7 +655,7 @@ function UrgencyReviewCard({
   return (
     <article className="urgency-card">
       <div className="urgency-card-heading">
-        <div><strong>{urgency.student_name}</strong><span>Turma {urgency.classroom} · {urgency.protocol}</span></div>
+        <div><strong>{urgency.student_name}</strong><span>Sala {urgency.classroom} · {urgency.protocol}</span></div>
         <span className={urgency.evaluation === 'pending' ? 'urgency-state-pending' : 'urgency-state-reviewed'}>{evaluationLabels[urgency.evaluation]}</span>
       </div>
       <p className="urgency-card-date">Recebido em {new Date(urgency.submitted_at).toLocaleString('pt-BR')}</p>
