@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import milenaPhoto from './assets/milena_img-removebg-preview.png'
 import './App.css'
+import './Dashboard.css'
 
 type Screen = 'home' | 'request' | 'lookup' | 'urgency' | 'admin' | 'dashboard'
 type RequestResult = { protocol: string; status: string; queue_position?: number; completed_at?: string }
@@ -189,11 +190,11 @@ function App() {
           <span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>
           <span><strong>Acolhimento</strong><small>Atendimento psicológico escolar</small></span>
         </button>
-        <nav aria-label="Navegação principal">
+        {screen !== 'dashboard' && <nav aria-label="Navegação principal">
           <button onClick={() => navigate('home')}>Início</button>
           <button onClick={() => navigate('lookup')}>Consultar solicitação</button>
           <button className="nav-admin" onClick={() => navigate('admin')}>Acesso da psicóloga</button>
-        </nav>
+        </nav>}
       </header>
 
       <main>
@@ -478,53 +479,97 @@ function AdminDashboard({ onLogout }: { onLogout: () => Promise<void> }) {
     not_urgent: 'Não classificada como urgência',
     more_info: 'Precisa de mais informações',
   }
+  const dashboardMetrics = [
+    { label: 'Aguardando', value: counts.waiting },
+    { label: 'Em análise', value: counts.review },
+    { label: 'Em atendimento', value: counts.in_progress },
+    { label: 'Concluídos', value: counts.completed },
+    { label: 'Cancelados', value: counts.cancelled },
+    { label: 'Urgências pendentes', value: pendingUrgencies, urgent: true },
+  ]
   return (
-    <section className="admin-page">
-      <div className="admin-heading">
-        <div><p className="eyebrow">Painel da psicóloga</p><h1>Fila de atendimento</h1><p className="form-lead">Acompanhe os pedidos e atualize o andamento dos atendimentos.</p></div>
-        <button className="button button-secondary" disabled={loggingOut} onClick={() => void logout()}>{loggingOut ? 'Encerrando…' : 'Encerrar sessão'}</button>
-      </div>
-      {error && <p role="alert" className="form-message">{error}</p>}
-      <section className="notification-panel" aria-labelledby="notifications-title">
-        <div className="admin-section-title">
-          <div><p className="eyebrow">Avisos do sistema</p><h2 id="notifications-title">Notificações</h2></div>
-          <span>{notifications.length} {notifications.length === 1 ? 'novo aviso' : 'novos avisos'}</span>
+    <section className="admin-page dashboard-page">
+      <header className="dashboard-header">
+        <div>
+          <p className="dashboard-kicker"><span aria-hidden="true" /> Área reservada da psicóloga</p>
+          <h1>Painel de atendimento</h1>
+          <p>Acompanhe a fila, analise os pedidos e atualize cada atendimento.</p>
         </div>
-        {notifications.length ? <ul>
-          {notifications.map((notification) => (
-            <li key={notification.id}>
-              <span className="notification-indicator" aria-hidden="true" />
-              <div><strong>Nova solicitação de {notification.full_name}</strong><span>Sala {notification.classroom} · {notification.protocol} · {new Date(notification.received_at).toLocaleString('pt-BR')}</span></div>
-              <button aria-label={`Dispensar aviso de ${notification.full_name}`} onClick={() => setNotifications((current) => current.filter((item) => item.id !== notification.id))}>Dispensar</button>
-            </li>
-          ))}
-        </ul> : <p className="notification-empty">Novos pedidos aparecerão aqui enquanto você estiver conectada ao painel.</p>}
+        <div className="dashboard-header-actions">
+          <button className="button button-secondary" disabled={!loaded || loggingOut} onClick={() => { setError(''); void load() }}>
+            {loaded ? 'Atualizar dados' : 'Carregando…'}
+          </button>
+          <button className="button button-secondary dashboard-logout" disabled={loggingOut} onClick={() => void logout()}>
+            {loggingOut ? 'Encerrando…' : 'Encerrar sessão'}
+          </button>
+        </div>
+      </header>
+
+      {error && (
+        <div role="alert" className="dashboard-alert">
+          <span className="dashboard-alert-mark" aria-hidden="true">!</span>
+          <div><strong>Não foi possível atualizar o painel</strong><p>{error}</p></div>
+          <button className="details-button" disabled={!loaded} onClick={() => { setError(''); void load() }}>Tentar novamente</button>
+        </div>
+      )}
+
+      <section className="dashboard-panel dashboard-notifications" aria-labelledby="notifications-title">
+        <div className="dashboard-panel-heading">
+          <div><span className="dashboard-section-label">Avisos do sistema</span><h2 id="notifications-title">Notificações</h2></div>
+          <span className="dashboard-count">{notifications.length} {notifications.length === 1 ? 'novo aviso' : 'novos avisos'}</span>
+        </div>
+        {notifications.length ? (
+          <ul className="notification-list">
+            {notifications.map((notification) => (
+              <li key={notification.id}>
+                <span className="notification-indicator" aria-hidden="true" />
+                <div>
+                  <strong>Nova solicitação de {notification.full_name}</strong>
+                  <span>Sala {notification.classroom} · {notification.protocol} · {new Date(notification.received_at).toLocaleString('pt-BR')}</span>
+                </div>
+                <button aria-label={`Dispensar aviso de ${notification.full_name}`} onClick={() => setNotifications((current) => current.filter((item) => item.id !== notification.id))}>Dispensar</button>
+              </li>
+            ))}
+          </ul>
+        ) : <p className="dashboard-empty-inline">Novos pedidos aparecerão aqui enquanto você estiver conectada ao painel.</p>}
       </section>
-      <div className="metrics">
-        <div><small>Aguardando</small><strong>{counts.waiting}</strong></div>
-        <div><small>Em análise</small><strong>{counts.review}</strong></div>
-        <div><small>Em atendimento</small><strong>{counts.in_progress}</strong></div>
-        <div><small>Concluídos</small><strong>{counts.completed}</strong></div>
-        <div><small>Cancelados</small><strong>{counts.cancelled}</strong></div>
-        <div className="urgency-metric"><small>Urgências pendentes</small><strong>{pendingUrgencies}</strong></div>
-      </div>
-      <section className="call-list-section" aria-labelledby="call-list-title">
-        <div className="admin-section-title">
-          <div><p className="eyebrow">Ordem de recebimento</p><h2 id="call-list-title">Lista de chamada</h2></div>
-          <span>{callList.length} {callList.length === 1 ? 'pessoa na fila' : 'pessoas na fila'}</span>
-        </div>
-        <p className="call-list-intro">A fila segue a posição de cada solicitação. Quem está no topo é a próxima pessoa a ser chamada.</p>
-        {callList.length ? (
-          <ol className="call-list">
-            {callList.map((item) => (
-              <li key={item.id} className={item.queue_position === 1 ? 'call-list-next' : undefined}>
-                <span className="call-list-position" aria-label={`Posição ${item.queue_position}`}>{item.queue_position}</span>
-                <div className="call-list-person"><strong>{item.full_name}</strong><span>Sala {item.classroom} · Pedido recebido em {new Date(item.received_at).toLocaleString('pt-BR')}</span></div>
+
+      <section className="dashboard-metrics" aria-label="Resumo das solicitações">
+        {dashboardMetrics.map((metric, index) => (
+          <article key={metric.label} className={metric.urgent ? 'dashboard-metric dashboard-metric-urgent' : 'dashboard-metric'}>
+            <span className="dashboard-metric-index" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
+            <div><span>{metric.label}</span><strong>{metric.value}</strong></div>
+          </article>
+        ))}
+      </section>
+
+      <div className="dashboard-workspace">
+        <section className="dashboard-panel call-list-section" aria-labelledby="call-list-title">
+          <div className="dashboard-panel-heading">
+            <div><span className="dashboard-section-label">Ordem de recebimento</span><h2 id="call-list-title">Fila de atendimento</h2></div>
+            <span className="dashboard-count">{callList.length} {callList.length === 1 ? 'pessoa' : 'pessoas'}</span>
+          </div>
+          <p className="call-list-intro">A primeira pessoa da lista é a próxima a ser chamada.</p>
+          {callList.length ? (
+            <ol className="call-list">
+              {callList.map((item) => (
+                <li key={item.id} className={item.queue_position === 1 ? 'call-list-next' : undefined}>
+                  <span className="call-list-position" aria-label={`Posição ${item.queue_position}`}>{String(item.queue_position).padStart(2, '0')}</span>
+                  <div className="call-list-person">
+                    <strong>{item.full_name}</strong>
+                    <span>Sala {item.classroom}</span>
+                    <small>Pedido recebido em {new Date(item.received_at).toLocaleString('pt-BR')}</small>
+                  </div>
                   <div className="call-list-status">
-                    <strong>{item.queue_position === 1 ? 'Próximo da fila' : statusLabels[item.status]}</strong>
-                    <select aria-label={`Contato de ${item.full_name}`} value={item.contact_status} disabled={updatingId === item.id} onChange={(event) => void updateContactStatus(item.id, event.target.value as ContactStatus)}>
-                      {Object.entries(contactStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                    </select>
+                    <span className={item.queue_position === 1 ? 'queue-status queue-status-next' : 'queue-status'}>{item.queue_position === 1 ? 'Próxima da fila' : statusLabels[item.status]}</span>
+                    <label className="dashboard-control-label">
+                      Situação do contato
+                      <select aria-label={`Contato de ${item.full_name}`} value={item.contact_status} disabled={updatingId === item.id} onChange={(event) => void updateContactStatus(item.id, event.target.value as ContactStatus)}>
+                        {Object.entries(contactStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                      </select>
+                    </label>
+                  </div>
+                  <div className="call-list-actions">
                     <button className="button button-primary attended-button" disabled={updatingId === item.id} onClick={() => void markAsAttended(item)}>
                       {updatingId === item.id ? 'Salvando…' : 'Marcar atendimento realizado'}
                     </button>
@@ -538,49 +583,61 @@ function AdminDashboard({ onLogout }: { onLogout: () => Promise<void> }) {
                     </form>
                   )}
                 </li>
-            ))}
-          </ol>
-        ) : <p className="empty-state">{loaded ? 'Não há pessoas aguardando atendimento na fila.' : 'Carregando lista de chamada…'}</p>}
-      </section>
-      <section className="urgency-section" aria-labelledby="urgency-list-title">
-        <div className="admin-section-title">
-          <div><p className="eyebrow">Avaliação da psicóloga</p><h2 id="urgency-list-title">Pedidos de urgência</h2></div>
-          <span>{urgencies.filter((item) => item.evaluation === 'pending').length} aguardando avaliação</span>
+              ))}
+            </ol>
+          ) : <p className="empty-state">{loaded ? 'Não há pessoas aguardando atendimento na fila.' : 'Carregando lista de chamada…'}</p>}
+        </section>
+
+        <section className="dashboard-panel urgency-section" aria-labelledby="urgency-list-title">
+          <div className="dashboard-panel-heading">
+            <div><span className="dashboard-section-label">Avaliação da psicóloga</span><h2 id="urgency-list-title">Pedidos de urgência</h2></div>
+            <span className="dashboard-count">{urgencies.filter((item) => item.evaluation === 'pending').length} pendentes</span>
+          </div>
+          {urgencies.length ? <div className="urgency-list">{urgencies.map((urgency) => (
+            <UrgencyReviewCard
+              key={urgency.id}
+              urgency={urgency}
+              evaluationLabels={urgencyEvaluationLabels}
+              disabled={evaluatingUrgencyId === urgency.id}
+              onEvaluate={evaluateUrgency}
+            />
+          ))}</div> : <p className="empty-state">{loaded ? 'Nenhum pedido de urgência recebido.' : 'Carregando pedidos de urgência…'}</p>}
+        </section>
+      </div>
+
+      <section className="dashboard-panel dashboard-requests" aria-labelledby="requests-title">
+        <div className="dashboard-panel-heading">
+          <div><span className="dashboard-section-label">Gerenciamento</span><h2 id="requests-title">Todas as solicitações</h2></div>
+          <span className="dashboard-count">{items.length} {items.length === 1 ? 'registro' : 'registros'}</span>
         </div>
-        {urgencies.length ? <div className="urgency-list">{urgencies.map((urgency) => (
-          <UrgencyReviewCard
-            key={urgency.id}
-            urgency={urgency}
-            evaluationLabels={urgencyEvaluationLabels}
-            disabled={evaluatingUrgencyId === urgency.id}
-            onEvaluate={evaluateUrgency}
-          />
-        ))}</div> : <p className="empty-state">{loaded ? 'Nenhum pedido de urgência recebido.' : 'Carregando pedidos de urgência…'}</p>}
+        <form className="dashboard-request-filters" onSubmit={(event) => { event.preventDefault(); void load() }}>
+          <label>Buscar por nome ou sala<input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Digite para buscar" /></label>
+          <label>Filtrar por status<select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">Todos os status</option>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+          <button className="button button-primary" disabled={!loaded}>{loaded ? 'Aplicar filtros' : 'Carregando…'}</button>
+        </form>
+        {items.length ? (
+          <div className="table-wrap dashboard-table-wrap">
+            <table>
+              <thead><tr><th>Aluno</th><th>Sala</th><th>Recebido</th><th>Protocolo</th><th>Status</th><th>Posição</th><th>Detalhes</th></tr></thead>
+              <tbody>{items.map((item) => (
+                <tr key={item.id}>
+                  <td>{item.full_name}</td>
+                  <td>{item.classroom}</td>
+                  <td>{new Date(item.received_at).toLocaleString('pt-BR')}</td>
+                  <td><span className="request-protocol">{item.protocol}</span></td>
+                  <td><select className="status-select" aria-label={`Status de ${item.full_name}`} value={item.status} disabled={updatingId === item.id} onChange={(event) => void updateStatus(item.id, event.target.value as RequestStatus)}>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></td>
+                  <td>{item.queue_position ?? '—'}</td>
+                  <td><button className="details-button" onClick={() => void showDetails(item.id)}>Ver detalhes</button></td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="empty-state">
+            {!loaded ? 'Carregando solicitações…' : error ? 'Não foi possível carregar as solicitações. Tente atualizar o painel.' : 'Nenhuma solicitação encontrada.'}
+          </p>
+        )}
       </section>
-      <div className="admin-section-title"><h2>Solicitações</h2><button onClick={() => { setError(''); void load() }}>Atualizar fila</button></div>
-      <form className="dashboard-filters" onSubmit={(event) => { event.preventDefault(); void load() }}>
-        <label>Buscar por nome ou sala<input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Digite para buscar" /></label>
-        <label>Filtrar por status<select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">Todos os status</option>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-        <button className="button button-primary" disabled={!loaded}>{loaded ? 'Filtrar' : 'Carregando…'}</button>
-      </form>
-      {items.length ? (
-        <div className="table-wrap">
-          <table>
-            <thead><tr><th>Aluno</th><th>Sala</th><th>Recebido</th><th>Protocolo</th><th>Status</th><th>Posição</th><th>Detalhes</th></tr></thead>
-            <tbody>{items.map((item) => (
-              <tr key={item.id}>
-                <td>{item.full_name}</td>
-                <td>{item.classroom}</td>
-                <td>{new Date(item.received_at).toLocaleString('pt-BR')}</td>
-                <td>{item.protocol}</td>
-                <td><select className="status-select" aria-label={`Status de ${item.full_name}`} value={item.status} disabled={updatingId === item.id} onChange={(event) => void updateStatus(item.id, event.target.value as RequestStatus)}>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></td>
-                <td>{item.queue_position ?? '—'}</td>
-                <td><button className="details-button" onClick={() => void showDetails(item.id)}>Ver detalhes</button></td>
-              </tr>
-            ))}</tbody>
-          </table>
-        </div>
-      ) : <p className="empty-state">{loaded && !error ? 'Nenhuma solicitação encontrada.' : 'Carregando solicitações…'}</p>}
       {(detailsLoading || detailsError || details) && (
         <div className="details-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) closeDetails() }}>
           <section className="details-dialog" role="dialog" aria-modal="true" aria-labelledby="details-title">
