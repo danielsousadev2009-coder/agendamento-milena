@@ -127,7 +127,6 @@ export async function getDashboard(filters) {
       id: Number(order.id),
       full_name: order.full_name,
       classroom: order.classroom,
-      cpf_masked: maskCpf(decryptValue(order.cpf_ciphertext)),
       received_at: order.received_at,
       protocol: order.protocol,
       status: order.status,
