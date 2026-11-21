@@ -37,7 +37,7 @@ Configure no `.env`:
 | Variável | Uso |
 |---|---|
 | `DATABASE_URL` | URL do PostgreSQL. Para Vercel, use no Supabase **Connect → Transaction pooler**, porta `6543`; use o host e usuário exatos fornecidos pelo painel. Codifique caracteres reservados da senha na URL. Em produção, o backend exige `sslmode=verify-full` para validar TLS, certificado e hostname. |
-| `DATABASE_SSL_CA_BASE64` | Certificado raiz baixado em **Supabase → Database settings → SSL Configuration**, codificado em Base64. Obrigatório em produção para validar a cadeia do certificado do PostgreSQL. |
+| `DATABASE_SSL_CA_BASE64` | Certificado CA baixado em **Supabase → Database settings → SSL Configuration**, em PEM ou Base64. Obrigatório em produção para validar a cadeia do certificado do PostgreSQL. |
 | `JWT_SECRET` | Segredo aleatório exclusivo, com pelo menos 32 bytes. Gere um novo; não reutilize uma senha de usuário. |
 | `PII_ENCRYPTION_KEY` | Copie exatamente a chave Fernet usada pelo backend atual. Trocá-la torna CPF e descrições já gravados ilegíveis. |
 | `CPF_INDEX_KEY` | Copie exatamente a chave HMAC atual. Trocá-la impede localizar solicitações existentes por CPF. |
@@ -45,7 +45,7 @@ Configure no `.env`:
 | `NODE_ENV` | `development` localmente e `production` na Vercel. |
 | `PORT` | Porta local da API; padrão `3000`. |
 
-Baixe o certificado raiz em **Supabase → Database settings → SSL Configuration** e codifique o arquivo localmente para configurar `DATABASE_SSL_CA_BASE64`:
+Baixe o certificado raiz em **Supabase → Database settings → SSL Configuration**. Você pode configurar o conteúdo PEM diretamente ou codificar o arquivo localmente para configurar `DATABASE_SSL_CA_BASE64`:
 
 ```powershell
 [Convert]::ToBase64String([IO.File]::ReadAllBytes("C:\caminho\do\certificado.crt"))
@@ -98,7 +98,7 @@ Para redefinir a senha da única conta ativa de psicóloga, use `npm.cmd run res
 1. Importe este repositório na Vercel com a raiz do projeto na pasta principal. O `vercel.json` mantém o build Vite e encaminha `/api/*` para uma função Node.
 2. Cadastre os segredos nas variáveis da Vercel para cada ambiente necessário. Não use prefixo `VITE_` para segredos:
    - `DATABASE_URL`: URL do **transaction pooler** Supabase (porta `6543`); o backend exige `sslmode=verify-full`.
-   - `DATABASE_SSL_CA_BASE64`: certificado raiz Supabase em Base64, conforme as instruções acima.
+   - `DATABASE_SSL_CA_BASE64`: certificado CA Supabase em PEM ou Base64, conforme as instruções acima.
    - `JWT_SECRET`: segredo novo e exclusivo.
    - `PII_ENCRYPTION_KEY` e `CPF_INDEX_KEY`: valores atuais, copiados sem alteração do serviço backend existente.
    - `FRONTEND_URL`: origem HTTPS de produção, por exemplo `https://seu-projeto.vercel.app`, sem `/` final.

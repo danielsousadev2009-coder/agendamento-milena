@@ -17,10 +17,22 @@ export function normalizeDatabaseUrl(value, isProduction) {
 }
 
 export function getDatabaseSslCa(value) {
-  if (!value || !/^[A-Za-z0-9+/]+={0,2}$/u.test(value)) {
-    throw new Error('DATABASE_SSL_CA_BASE64 precisa conter o certificado raiz codificado em Base64.')
+  const input = typeof value === 'string' ? value.trim() : ''
+  const quote = input[0]
+  const unquoted = input.length >= 2
+    && (quote === '"' || quote === "'")
+    && input.at(-1) === quote
+    ? input.slice(1, -1).trim()
+    : input
+  const encoded = unquoted.replace(/\s+/gu, '')
+  const certificate = unquoted.includes('-----BEGIN CERTIFICATE-----')
+    ? unquoted
+    : /^[A-Za-z0-9+/]+={0,2}$/u.test(encoded)
+      ? Buffer.from(encoded, 'base64').toString('utf8')
+      : ''
+  if (!certificate) {
+    throw new Error('DATABASE_SSL_CA_BASE64 precisa conter um certificado CA em PEM ou Base64.')
   }
-  const certificate = Buffer.from(value, 'base64').toString('utf8')
   try {
     if (!new X509Certificate(certificate).ca) {
       throw new Error('O certificado informado não é uma autoridade certificadora.')

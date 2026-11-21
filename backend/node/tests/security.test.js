@@ -14,10 +14,11 @@ const env = {
 }
 
 test('production config defaults PostgreSQL connections to TLS', () => {
+  const rootCertificateBase64 = Buffer.from(rootCertificates[0]).toString('base64')
   const configEnv = {
     NODE_ENV: 'production',
     DATABASE_URL: 'postgresql://db.example.test/postgres',
-    DATABASE_SSL_CA_BASE64: Buffer.from(rootCertificates[0]).toString('base64'),
+    DATABASE_SSL_CA_BASE64: rootCertificateBase64,
     JWT_SECRET: 'a'.repeat(48),
     PII_ENCRYPTION_KEY: fernetKey,
     CPF_INDEX_KEY: 'test-cpf-index-key',
@@ -28,6 +29,8 @@ test('production config defaults PostgreSQL connections to TLS', () => {
   assert.equal(normalizedUrl.searchParams.get('sslmode'), 'verify-full')
   assert.equal(normalizedUrl.searchParams.has('uselibpqcompat'), false)
   assert.equal(getDatabaseSslCa(configEnv.DATABASE_SSL_CA_BASE64), rootCertificates[0])
+  assert.equal(getDatabaseSslCa(rootCertificates[0]), rootCertificates[0])
+  assert.equal(getDatabaseSslCa(`"${rootCertificateBase64.slice(0, 64)}\n${rootCertificateBase64.slice(64)}"`), rootCertificates[0])
 
   assert.throws(() => loadConfig({
     ...configEnv,
