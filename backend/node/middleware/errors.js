@@ -35,11 +35,21 @@ export function errorHandler(error, request, response, next) {
   }
 
   if (status >= 500) {
+    const errorName = error && typeof error.name === 'string' ? error.name : typeof error
+    const stack = error && typeof error.stack === 'string'
+      ? error.stack.split('\n')
+        .slice(1)
+        .filter((frame) => /^\s*at\s/u.test(frame))
+        .slice(0, 4)
+        .map((frame) => frame.trim())
+      : []
     console.error('Falha na API', {
       requestId: request.requestId,
       method: request.method,
       path: request.path,
       code: error.code ?? 'unknown',
+      errorName,
+      stack,
     })
   }
   return response.status(status).json(body)
