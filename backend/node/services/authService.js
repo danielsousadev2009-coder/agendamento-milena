@@ -1,6 +1,6 @@
 import jwt from 'jsonwebtoken'
 import {
-  findPsychologistByUsername,
+  findPsychologistByIdentifier,
   newSessionId,
   startPsychologistSession,
 } from '../models/authRepository.js'
@@ -16,7 +16,7 @@ function assertJwtSecret(secret) {
 }
 
 export async function loginPsychologist(db, { username, password }, config) {
-  const user = await findPsychologistByUsername(db, username)
+  const user = await findPsychologistByIdentifier(db, username)
   if (!user || !user.is_active || !user.psychologist_active) return null
   if (!(await verifyDjangoPassword(password, user.password))) return null
 

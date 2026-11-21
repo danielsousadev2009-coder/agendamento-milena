@@ -1,16 +1,20 @@
 import { createSessionId } from '../security/crypto.js'
 import { withTransaction } from './transaction.js'
 
-export async function findPsychologistByUsername(db, username) {
+export async function findPsychologistByIdentifier(db, identifier) {
   const result = await db.query(
     `SELECT u.id, u.username, u.password, u.is_active, p.active AS psychologist_active
      FROM auth_user u
      JOIN requests_app_psychologistaccount p ON p.user_id = u.id
-     WHERE u.username = $1
-     LIMIT 1`,
-    [username],
+     WHERE u.username = $1 OR lower(u.email) = lower($1)
+     ORDER BY CASE WHEN u.username = $1 THEN 0 ELSE 1 END
+     LIMIT 2`,
+    [identifier],
   )
-  return result.rows[0] ?? null
+  const [firstMatch] = result.rows
+  if (!firstMatch) return null
+  if (firstMatch.username === identifier) return firstMatch
+  return result.rows.length === 1 ? firstMatch : null
 }
 
 export async function findActivePsychologistSession(db, userId, sessionId) {

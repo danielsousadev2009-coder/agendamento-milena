@@ -19,6 +19,7 @@ class MemoryDatabase {
     this.audits = []
     this.sessions = new Map()
     this.rateCounts = new Map()
+    this.additionalUsers = []
     this.queueOrder = 0
     this.nextRequestId = 1
     this.nextUrgencyId = 1
@@ -27,6 +28,7 @@ class MemoryDatabase {
     this.user = {
       id: 1,
       username: 'psychologist',
+      email: 'psychologist@example.test',
       password: `pbkdf2_sha256$1$${salt}$${hash}`,
       is_active: true,
       psychologist_active: true,
@@ -47,9 +49,15 @@ class MemoryDatabase {
       return { rows: [{ count, expire_date: values[1] }], rowCount: 1 }
     }
     if (query.includes('FROM auth_user u') && query.includes('psychologistaccount p')) {
+      const identifier = String(values[0])
+      const matches = [this.user, ...this.additionalUsers]
+        .filter((user) => user.username === identifier
+          || user.email?.toLowerCase() === identifier.toLowerCase())
+        .sort((left, right) => Number(left.username !== identifier) - Number(right.username !== identifier))
+        .slice(0, 2)
       return {
-        rows: this.user.username === values[0] ? [{ ...this.user }] : [],
-        rowCount: this.user.username === values[0] ? 1 : 0,
+        rows: matches.map((user) => ({ ...user })),
+        rowCount: matches.length,
       }
     }
     if (query.includes('FROM django_session s')) {
@@ -412,6 +420,29 @@ test('admin endpoints require CSRF and a psychologist session, then support dash
   assert.equal(invalidLogin.response.status, 400)
   assert.equal(database.sessions.size, 0)
 
+  database.additionalUsers.push({
+    ...database.user,
+    id: 2,
+    username: 'another-psychologist',
+  })
+  let ambiguousLogin
+  try {
+    ambiguousLogin = await call('/api/admin/login/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: ENV.FRONTEND_URL,
+        Cookie: csrfCookieHeader,
+        'X-CSRFToken': csrfToken,
+      },
+      body: JSON.stringify({ username: 'PSYCHOLOGIST@EXAMPLE.TEST', password: 'test-password-123' }),
+    })
+  } finally {
+    database.additionalUsers.pop()
+  }
+  assert.equal(ambiguousLogin.response.status, 400)
+  assert.equal(database.sessions.size, 0)
+
   const login = await call('/api/admin/login/', {
     method: 'POST',
     headers: {
@@ -420,7 +451,7 @@ test('admin endpoints require CSRF and a psychologist session, then support dash
       Cookie: csrfCookieHeader,
       'X-CSRFToken': csrfToken,
     },
-    body: JSON.stringify({ username: 'psychologist', password: 'test-password-123' }),
+    body: JSON.stringify({ username: 'PSYCHOLOGIST@EXAMPLE.TEST', password: 'test-password-123' }),
   })
   assert.equal(login.response.status, 200)
   assert.deepEqual(login.body, { authenticated: true })
