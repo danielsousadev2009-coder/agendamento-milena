@@ -25,7 +25,7 @@ export async function createCounselingRequest(db, { fullName, cpfDigest, classro
       [cpfDigest],
     )
     if (activeRequest.rowCount) {
-      const error = new Error('Você já possui uma solicitação ativa. Use o protocolo recebido para consultar o andamento.')
+      const error = new Error('Você já possui uma solicitação ativa. Consulte o andamento usando o CPF informado.')
       error.code = 'ACTIVE_REQUEST_EXISTS'
       throw error
     }
@@ -64,6 +64,20 @@ export async function findCounselingRequestByProtocol(db, protocol) {
      WHERE protocol = $1
      LIMIT 1`,
     [protocol],
+  )
+  const request = result.rows[0]
+  return request ? { ...request, id: asNumber(request.id), queue_order: asNumber(request.queue_order) } : null
+}
+
+export async function findCounselingRequestByCpfDigest(db, digest) {
+  const result = await db.query(
+    `SELECT id, cpf_digest, status, queue_order, completed_at
+     FROM requests_app_counselingrequest
+     WHERE cpf_digest = $1
+     ORDER BY CASE WHEN status IN ('waiting', 'review', 'in_progress') THEN 0 ELSE 1 END,
+              received_at DESC
+     LIMIT 1`,
+    [digest],
   )
   const request = result.rows[0]
   return request ? { ...request, id: asNumber(request.id), queue_order: asNumber(request.queue_order) } : null

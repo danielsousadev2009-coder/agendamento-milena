@@ -138,6 +138,26 @@ class MemoryDatabase {
       const request = this.requests.find((item) => item.protocol === values[0])
       return { rows: request ? [{ ...request }] : [], rowCount: request ? 1 : 0 }
     }
+    if (query.startsWith('SELECT id, cpf_digest, status, queue_order, completed_at FROM requests_app_counselingrequest')) {
+      const request = this.requests
+        .filter((item) => item.cpf_digest === values[0])
+        .sort((left, right) => {
+          const leftActive = ['waiting', 'review', 'in_progress'].includes(left.status)
+          const rightActive = ['waiting', 'review', 'in_progress'].includes(right.status)
+          if (leftActive !== rightActive) return Number(rightActive) - Number(leftActive)
+          return new Date(right.received_at) - new Date(left.received_at)
+        })[0]
+      return {
+        rows: request ? [{
+          id: request.id,
+          cpf_digest: request.cpf_digest,
+          status: request.status,
+          queue_order: request.queue_order,
+          completed_at: request.completed_at,
+        }] : [],
+        rowCount: request ? 1 : 0,
+      }
+    }
     if (query.startsWith('SELECT COUNT(*)::integer AS position')) {
       const position = this.requests.filter((item) => ['waiting', 'review', 'in_progress'].includes(item.status)
         && item.queue_order <= values[1]).length
@@ -370,7 +390,7 @@ test('public endpoints preserve health, CSRF, validation, creation, status, and 
   const lookup = await call('/api/requests/status/', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ protocol: created.body.protocol, cpf: CPF }),
+    body: JSON.stringify({ cpf: CPF }),
   })
   assert.equal(lookup.response.status, 200)
   assert.deepEqual(lookup.body, { status: 'waiting', queue_position: 1 })
@@ -378,9 +398,17 @@ test('public endpoints preserve health, CSRF, validation, creation, status, and 
   const wrongIdentity = await call('/api/requests/status/', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ protocol: created.body.protocol, cpf: '11144477735' }),
+    body: JSON.stringify({ cpf: '11144477735' }),
   })
   assert.equal(wrongIdentity.response.status, 404)
+
+  const invalidLookup = await call('/api/requests/status/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ cpf: '11111111111' }),
+  })
+  assert.equal(invalidLookup.response.status, 400)
+  assert.deepEqual(invalidLookup.body.cpf, ['Informe um CPF válido.'])
 
   const urgency = await call('/api/requests/urgency/', {
     method: 'POST',
@@ -533,7 +561,7 @@ test('admin endpoints require CSRF and a psychologist session, then support dash
   const completedStatus = await call('/api/requests/status/', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ protocol: database.requests[0].protocol, cpf: CPF }),
+    body: JSON.stringify({ cpf: CPF }),
   })
   assert.equal(completedStatus.response.status, 200)
   assert.deepEqual(completedStatus.body, {
@@ -581,13 +609,30 @@ test('admin endpoints require CSRF and a psychologist session, then support dash
   assert.equal(wrongMethod.response.status, 405)
 })
 
+test('CPF-only lookup prefers an active request over older completed requests', async () => {
+  const created = await call('/api/requests/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ full_name: 'Ana Souza', cpf: CPF, classroom: '20' }),
+  })
+  assert.equal(created.response.status, 201)
+
+  const lookup = await call('/api/requests/status/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ cpf: CPF }),
+  })
+  assert.equal(lookup.response.status, 200)
+  assert.deepEqual(lookup.body, { status: 'waiting', queue_position: 1 })
+})
+
 test('public status throttling rejects the request after the configured hourly limit', async () => {
   let lastResult
   for (let count = 0; count < 60; count += 1) {
     lastResult = await call('/api/requests/status/', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ protocol: 'not-found', cpf: CPF }),
+      body: JSON.stringify({ cpf: CPF }),
     })
   }
   assert.equal(lastResult.response.status, 429)

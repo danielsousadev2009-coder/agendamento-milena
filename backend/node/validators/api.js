@@ -89,6 +89,8 @@ const publicIdentitySchema = z.object({
   cpf: cpfSchema,
 })
 
+const publicCpfSchema = z.object({ cpf: cpfSchema })
+
 const urgencyCreateSchema = publicIdentitySchema.extend({
   description: stringField({
     min: 10,
@@ -142,6 +144,10 @@ export function validateRequestCreate(body) {
 
 export function validatePublicIdentity(body) {
   return parse(publicIdentitySchema, body)
+}
+
+export function validatePublicCpf(body) {
+  return parse(publicCpfSchema, body)
 }
 
 export function validateUrgencyCreate(body) {

@@ -3,10 +3,11 @@ import {
   createRequest,
   createUrgency,
   findPublicRequest,
+  findPublicRequestByCpf,
   getPublicStatus,
 } from '../services/requestService.js'
 import {
-  validatePublicIdentity,
+  validatePublicCpf,
   validateRequestCreate,
   validateUrgencyCreate,
 } from '../validators/api.js'
@@ -44,7 +45,7 @@ export function publicController(db, config, env) {
       } catch (error) {
         if (error.code === 'ACTIVE_REQUEST_EXISTS' || (error.code === '23505' && error.constraint?.includes('active_cpf_digest'))) {
           return response.status(409).json({
-            detail: 'Você já possui uma solicitação ativa. Use o protocolo recebido para consultar o andamento.',
+            detail: 'Você já possui uma solicitação ativa. Consulte o andamento usando o CPF informado.',
           })
         }
         throw error
@@ -52,8 +53,8 @@ export function publicController(db, config, env) {
     },
 
     async lookupRequest(request, response) {
-      const data = validatePublicIdentity(request.body)
-      const order = await findPublicRequest(db, data, env)
+      const data = validatePublicCpf(request.body)
+      const order = await findPublicRequestByCpf(db, data.cpf, env)
       if (!order) {
         return response.status(404).json({ detail: 'Não encontramos uma solicitação com esses dados.' })
       }

@@ -4,6 +4,7 @@ import {
   createUrgencyRequest,
   evaluateUrgency,
   findCounselingRequestByProtocol,
+  findCounselingRequestByCpfDigest,
   getQueuePosition,
   getRequestCounts,
   getRequestDetails,
@@ -37,6 +38,12 @@ export async function findPublicRequest(db, { protocol, cpf }, env) {
   if (!request) return null
   const digest = cpfDigest(cpf, env)
   return safeCompare(request.cpf_digest, digest) ? request : null
+}
+
+export async function findPublicRequestByCpf(db, cpf, env) {
+  const digest = cpfDigest(cpf, env)
+  const request = await findCounselingRequestByCpfDigest(db, digest)
+  return request && safeCompare(request.cpf_digest, digest) ? request : null
 }
 
 export async function getPublicStatus(db, request) {
