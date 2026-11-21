@@ -101,7 +101,7 @@ export async function createUrgencyRequest(db, { requestId, ciphertext }) {
 
 export async function listCounselingRequests(db) {
   const result = await db.query(
-    `SELECT id, full_name, cpf_ciphertext, classroom, protocol, received_at, status,
+    `SELECT id, full_name, classroom, protocol, received_at, status,
             contact_status, queue_order
      FROM requests_app_counselingrequest
      ORDER BY queue_order, received_at`,

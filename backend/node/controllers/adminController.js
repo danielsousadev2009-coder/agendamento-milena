@@ -81,7 +81,7 @@ export function adminController(db, config, env) {
     },
 
     async dashboard(request, response) {
-      return response.json(await getDashboard(db, request.query, env))
+      return response.json(await getDashboard(db, request.query))
     },
 
     async requestDetails(request, response) {

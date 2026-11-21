@@ -53,7 +53,7 @@ Todos os caminhos abaixo estão sob `/api/`. Os caminhos, métodos, formatos e c
 | `POST /requests/urgency/` | Público | Vincula urgência a solicitação; `201 {received,evaluation}` ou `404 {detail}`; limite 3/hora/IP | Serviço com a cifra Fernet existente e auditoria. |
 | `POST /admin/login/` | Público, protegido por CSRF | `200 {authenticated:true}` ou `400 {detail}`; limite 5/minuto | Verificação dos hashes Django existentes, atualização compatível para bcrypt após login bem-sucedido e cookie JWT HttpOnly. |
 | `POST /admin/logout/` | Psicóloga autenticada | `204` | Revoga cookie de sessão e exige CSRF. |
-| `GET /admin/dashboard/` | Psicóloga autenticada | `200 {counts,pending_urgencies,call_list,requests}`; aceita `q`, `classroom`, `status` | Mesmas listas/contagens, com CPF mascarado e descrição dos filtros. |
+| `GET /admin/dashboard/` | Psicóloga autenticada | `200 {counts,pending_urgencies,call_list,requests}`; aceita `q`, `classroom`, `status` | Mesmas listas/contagens, sem CPF na listagem; CPF mascarado somente nos detalhes da solicitação. |
 | `GET /admin/requests/:id/` | Psicóloga autenticada | `200` com detalhes e histórico; `404 {detail}` | Mesmo formato e autorização. |
 | `PATCH /admin/requests/:id/` | Psicóloga autenticada | Atualiza status, contato, nota ou posição da fila; resposta `200 {updated:true}`; validação `400`; inexistente `404` | Mesmas validações, estados, justificativa de reordenação e auditoria. |
 | `GET /admin/urgencies/` | Psicóloga autenticada | `200 {urgencies}`; filtro opcional `evaluation` | Mesma ordenação, filtro e acesso restrito. |

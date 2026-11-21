@@ -160,7 +160,7 @@ class MemoryDatabase {
       })
       return { rows: [], rowCount: 1 }
     }
-    if (query.startsWith('SELECT id, full_name, cpf_ciphertext, classroom, protocol, received_at')) {
+    if (query.startsWith('SELECT id, full_name, classroom, protocol, received_at')) {
       return {
         rows: [...this.requests].sort((a, b) => a.queue_order - b.queue_order).map((item) => ({ ...item })),
         rowCount: this.requests.length,
@@ -433,10 +433,17 @@ test('admin endpoints require CSRF and a psychologist session, then support dash
   const updatedCsrfToken = updatedCsrfCookie.slice('csrftoken='.length)
   const cookieHeader = `${sessionHeader}; ${updatedCsrfCookie}`
 
-  const dashboard = await call('/api/admin/dashboard/', { headers: { Cookie: cookieHeader } })
+  const encryptionKey = ENV.PII_ENCRYPTION_KEY
+  ENV.PII_ENCRYPTION_KEY = Buffer.alloc(32, 8).toString('base64')
+  let dashboard
+  try {
+    dashboard = await call('/api/admin/dashboard/', { headers: { Cookie: cookieHeader } })
+  } finally {
+    ENV.PII_ENCRYPTION_KEY = encryptionKey
+  }
   assert.equal(dashboard.response.status, 200)
   assert.equal(dashboard.body.requests.length, 1)
-  assert.equal(dashboard.body.requests[0].cpf_masked, '***.***.***-25')
+  assert.equal(Object.hasOwn(dashboard.body.requests[0], 'cpf_masked'), false)
   assert.equal(dashboard.body.pending_urgencies, 1)
 
   const activeSession = await call('/api/admin/session/', { headers: { Cookie: cookieHeader } })

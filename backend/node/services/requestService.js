@@ -57,7 +57,7 @@ export async function createUrgency(db, request, description, env) {
   })
 }
 
-export async function getDashboard(db, query, env) {
+export async function getDashboard(db, query) {
   const [allRequests, counts, pendingUrgencies] = await Promise.all([
     listCounselingRequests(db),
     getRequestCounts(db),
@@ -97,7 +97,6 @@ export async function getDashboard(db, query, env) {
       id: request.id,
       full_name: request.full_name,
       classroom: request.classroom,
-      cpf_masked: maskCpf(decryptValue(request.cpf_ciphertext, env)),
       received_at: request.received_at,
       protocol: request.protocol,
       status: request.status,
